@@ -1,0 +1,294 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
+import Link from "next/link";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import AddressAutocomplete, { AddressParts } from "@/components/AddressAutocomplete";
+import { formatNaira } from "@/lib/format";
+import { ProductDTO } from "@/lib/types";
+
+// Posts PAY_REQUEST_ID + CHECKSUM to PayGate's hosted page, same as the
+// PartyWithZell integration. Building and submitting a real <form> (rather
+// than fetch + redirect) is required here — PayGate expects a browser POST.
+function redirectToPaygate(payRequestId: string, checksum: string) {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "https://secure.paygate.co.za/payweb3/process.trans";
+
+  const idField = document.createElement("input");
+  idField.type = "hidden";
+  idField.name = "PAY_REQUEST_ID";
+  idField.value = payRequestId;
+
+  const checksumField = document.createElement("input");
+  checksumField.type = "hidden";
+  checksumField.name = "CHECKSUM";
+  checksumField.value = checksum;
+
+  form.appendChild(idField);
+  form.appendChild(checksumField);
+  document.body.appendChild(form);
+  form.submit();
+}
+
+const inputClass =
+  "w-full h-11 px-3 border border-line text-sm focus:outline-none focus:border-ink transition-colors bg-paper";
+
+function Field({ label, optional, children }: { label: string; optional?: boolean; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-xs uppercase tracking-wide text-ink/50">
+        {label} {optional && <span className="normal-case">(optional)</span>}
+      </span>
+      <div className="mt-1.5">{children}</div>
+    </label>
+  );
+}
+
+export default function CheckoutPage({ searchParams }: { searchParams: { product?: string } }) {
+  const { data: session, status } = useSession();
+  const loggedIn = status === "authenticated";
+  const verified = session?.user?.emailVerified ?? false;
+
+  const [product, setProduct] = useState<ProductDTO | null>(null);
+  const [loadingProduct, setLoadingProduct] = useState(true);
+
+  const [senderName, setSenderName] = useState("");
+  const [senderPhone, setSenderPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientPhone, setRecipientPhone] = useState("");
+  const [loveNote, setLoveNote] = useState("");
+  const [street, setStreet] = useState("");
+  const [apartment, setApartment] = useState("");
+  const [city, setCity] = useState("");
+  const [addrState, setAddrState] = useState("");
+  const [country, setCountry] = useState("");
+
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent">("idle");
+
+  useEffect(() => {
+    if (session?.user?.email) setEmail(session.user.email);
+    if (session?.user?.name) setSenderName(session.user.name);
+  }, [session]);
+
+  useEffect(() => {
+    if (!searchParams?.product) {
+      setLoadingProduct(false);
+      return;
+    }
+    fetch(`/api/products/${searchParams.product}`)
+      .then((r) => r.json())
+      .then((data) => setProduct(data.product ?? null))
+      .finally(() => setLoadingProduct(false));
+  }, [searchParams?.product]);
+
+  const handleAddressSelect = useCallback((address: AddressParts) => {
+    setStreet(address.street);
+    setCity(address.city);
+    setAddrState(address.state);
+    setCountry(address.country);
+  }, []);
+
+  async function handleResendVerification() {
+    setResendStatus("sending");
+    await fetch("/api/auth/resend-verification", { method: "POST" });
+    setResendStatus("sent");
+  }
+
+  async function handlePurchase() {
+    if (!loggedIn || !verified || !product) return;
+
+    if (!senderName || !senderPhone || !email || !recipientName || !street || !city || !addrState || !country) {
+      setError("Fill in all required fields.");
+      return;
+    }
+
+    setError(null);
+    setPaying(true);
+
+    try {
+      const orderRes = await fetch("/api/orders/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productSlug: product.slug,
+          sender: { name: senderName, phone: senderPhone, email },
+          recipient: { name: recipientName, phone: recipientPhone || undefined },
+          loveNote: loveNote || undefined,
+          address: { street, apartment: apartment || undefined, city, state: addrState, country }
+        })
+      });
+      const order = await orderRes.json();
+      if (!orderRes.ok) throw new Error(order.error ?? "Could not create order.");
+
+      const payRes = await fetch("/api/paygate/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: order.amount, email, reference: order.reference })
+      });
+      const pay = await payRes.json();
+      if (!payRes.ok) throw new Error(pay.error ?? "Payment could not be started.");
+
+      redirectToPaygate(pay.payRequestId, pay.checksum);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setPaying(false);
+    }
+  }
+
+  return (
+    <>
+      <Header />
+      <main className="max-w-content mx-auto px-5 py-8">
+        <h1 className="text-2xl mb-8">Complete order</h1>
+
+        {!loadingProduct && !product && (
+          <p className="text-sm text-red-700 mb-6">No product selected — go back and pick something to send.</p>
+        )}
+
+        <div className="grid md:grid-cols-[1fr_320px] gap-10">
+          <div className="space-y-10">
+            <section>
+              <h2 className="text-sm uppercase tracking-wide text-ink/50 mb-4">Contact information</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="Your name">
+                  <input className={inputClass} value={senderName} onChange={(e) => setSenderName(e.target.value)} />
+                </Field>
+                <Field label="Your phone">
+                  <input className={inputClass} type="tel" value={senderPhone} onChange={(e) => setSenderPhone(e.target.value)} />
+                </Field>
+                <Field label="Email address">
+                  <input className={inputClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </Field>
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-sm uppercase tracking-wide text-ink/50 mb-4">Recipient</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="Recipient name">
+                  <input className={inputClass} value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
+                </Field>
+                <Field label="Recipient phone" optional>
+                  <input
+                    className={inputClass}
+                    type="tel"
+                    placeholder="Not necessary"
+                    value={recipientPhone}
+                    onChange={(e) => setRecipientPhone(e.target.value)}
+                  />
+                </Field>
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-sm uppercase tracking-wide text-ink/50 mb-4">Love note</h2>
+              <textarea
+                className={`${inputClass} h-28 py-2 resize-none`}
+                placeholder="Write a message for the recipient"
+                value={loveNote}
+                onChange={(e) => setLoveNote(e.target.value)}
+              />
+            </section>
+
+            <section>
+              <h2 className="text-sm uppercase tracking-wide text-ink/50 mb-4">Delivery address</h2>
+              <div className="grid gap-4">
+                <Field label="Street address">
+                  <AddressAutocomplete className={inputClass} onSelect={handleAddressSelect} />
+                  {/* AddressAutocomplete owns its own input; keep street in sync via manual entry too */}
+                  <input
+                    className={`${inputClass} mt-2`}
+                    placeholder="Street address (auto-filled above, editable)"
+                    value={street}
+                    onChange={(e) => setStreet(e.target.value)}
+                  />
+                </Field>
+                <Field label="Apartment / suite" optional>
+                  <input className={inputClass} value={apartment} onChange={(e) => setApartment(e.target.value)} />
+                </Field>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <Field label="City">
+                    <input className={inputClass} value={city} onChange={(e) => setCity(e.target.value)} />
+                  </Field>
+                  <Field label="State">
+                    <input className={inputClass} value={addrState} onChange={(e) => setAddrState(e.target.value)} />
+                  </Field>
+                  <Field label="Country">
+                    <input
+                      className={inputClass}
+                      placeholder="e.g. NG, US"
+                      value={country}
+                      onChange={(e) => setCountry(e.target.value)}
+                    />
+                  </Field>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <aside className="h-fit border border-line p-5 md:sticky md:top-24">
+            {product && (
+              <div className="flex items-center justify-between text-sm mb-4 pb-4 border-b border-line">
+                <span>{product.name}</span>
+                <span>{formatNaira(product.price)}</span>
+              </div>
+            )}
+
+            <div className="flex items-baseline justify-between text-lg pt-4 border-t border-line">
+              <span>Total</span>
+              <span>{formatNaira(product?.price ?? 0)}</span>
+            </div>
+
+            {error && <p className="text-xs text-red-700 mt-3">{error}</p>}
+
+            {loggedIn && !verified && (
+              <div className="mt-4 border border-line p-3 text-xs text-ink/70 bg-bone">
+                Verify your email before checking out.{" "}
+                {resendStatus === "sent" ? (
+                  <span>Email sent — check your inbox.</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendStatus === "sending"}
+                    className="underline underline-offset-4"
+                  >
+                    {resendStatus === "sending" ? "Sending..." : "Resend verification email"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              disabled={paying || !loggedIn || !verified || !product}
+              onClick={handlePurchase}
+              className="mt-5 w-full bg-ink text-paper py-4 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {paying ? "Redirecting to PayGate..." : !loggedIn ? "Log in to purchase" : "Purchase now"}
+            </button>
+            <p className="text-xs text-ink/40 mt-2 text-center">
+              {loggedIn ? (
+                "Paid by bank transfer via PayGate. You'll be redirected to complete payment."
+              ) : (
+                <>
+                  <Link href="/login" className="underline underline-offset-4">
+                    Log in
+                  </Link>{" "}
+                  to complete this order.
+                </>
+              )}
+            </p>
+          </aside>
+        </div>
+      </main>
+      <Footer />
+    </>
+  );
+}
