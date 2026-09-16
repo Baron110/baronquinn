@@ -7,6 +7,8 @@ import ProductCard from "@/components/ProductCard";
 import { getProductBySlug } from "@/lib/catalog";
 import { formatNaira } from "@/lib/format";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProductPage({ params }: { params: { slug: string } }) {
   const data = await getProductBySlug(params.slug);
   if (!data) return notFound();

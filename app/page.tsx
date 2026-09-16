@@ -3,6 +3,8 @@ import Footer from "@/components/Footer";
 import CategoryRow from "@/components/CategoryRow";
 import { getCategories, getActiveProducts } from "@/lib/catalog";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const [categories, products] = await Promise.all([getCategories(), getActiveProducts()]);
 
