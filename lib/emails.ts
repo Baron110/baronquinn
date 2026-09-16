@@ -1,4 +1,4 @@
-import { resend, FROM_EMAIL } from "./resend";
+import { getResend, FROM_EMAIL } from "./resend";
 import { formatNaira } from "./format";
 
 function wrapper(bodyHtml: string) {
@@ -15,7 +15,8 @@ export async function sendVerificationEmail(to: string, name: string, token: str
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const link = `${siteUrl}/verify?token=${token}`;
 
-  if (!process.env.RESEND_API_KEY) {
+  const resend = getResend();
+  if (!resend) {
     console.warn("RESEND_API_KEY not set — skipping verification email. Link:", link);
     return;
   }
@@ -43,7 +44,8 @@ export async function sendOrderConfirmationEmail(
   to: string,
   order: { productName: string; amount: number; reference: string; recipient: { name: string } }
 ) {
-  if (!process.env.RESEND_API_KEY) {
+  const resend = getResend();
+  if (!resend) {
     console.warn("RESEND_API_KEY not set — skipping order confirmation email for", order.reference);
     return;
   }
