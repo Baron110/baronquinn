@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { CategoryDTO } from "@/lib/types";
+import { CategoryDTO, ProductDTO } from "@/lib/types";
+import { formatNaira } from "@/lib/format";
 
 function HamburgerIcon() {
   return (
@@ -30,10 +31,18 @@ function HomeIcon() {
   );
 }
 
-function ChevronRight() {
+function ChevronDown({ open }: { open: boolean }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M9 6l6 6-6 6" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      className={`transition-transform ${open ? "rotate-180" : ""}`}
+    >
+      <path d="M6 9l6 6 6-6" />
     </svg>
   );
 }
@@ -42,6 +51,21 @@ export default function Header() {
   const { data: session, status } = useSession();
   const [categories, setCategories] = useState<CategoryDTO[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
+  const [productsByCategory, setProductsByCategory] = useState<Record<string, ProductDTO[]>>({});
+  const [loadingSlug, setLoadingSlug] = useState<string | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetch("/api/wallet")
+        .then((r) => r.json())
+        .then((data) => setWalletBalance(data.balance ?? 0))
+        .catch(() => setWalletBalance(null));
+    } else {
+      setWalletBalance(null);
+    }
+  }, [status]);
 
   useEffect(() => {
     fetch("/api/categories")
@@ -56,6 +80,27 @@ export default function Header() {
       document.body.style.overflow = "";
     };
   }, [menuOpen]);
+
+  async function toggleCategory(slug: string) {
+    if (expandedSlug === slug) {
+      setExpandedSlug(null);
+      return;
+    }
+    setExpandedSlug(slug);
+
+    if (!productsByCategory[slug]) {
+      setLoadingSlug(slug);
+      try {
+        const res = await fetch(`/api/products?category=${slug}`);
+        const data: ProductDTO[] = await res.json();
+        setProductsByCategory((prev) => ({ ...prev, [slug]: data }));
+      } catch {
+        setProductsByCategory((prev) => ({ ...prev, [slug]: [] }));
+      } finally {
+        setLoadingSlug(null);
+      }
+    }
+  }
 
   return (
     <>
@@ -91,6 +136,15 @@ export default function Header() {
                   className="hidden sm:block text-sm border border-ink px-4 h-10 leading-10 hover:bg-ink hover:text-paper transition-colors"
                 >
                   Admin
+                </Link>
+              )}
+
+              {status === "authenticated" && walletBalance !== null && (
+                <Link
+                  href="/wallet"
+                  className="text-xs sm:text-sm border border-ink px-3 sm:px-4 h-10 leading-10 hover:bg-ink hover:text-paper transition-colors"
+                >
+                  {formatNaira(walletBalance)}
                 </Link>
               )}
 
@@ -158,17 +212,50 @@ export default function Header() {
 
               <p className="text-xs uppercase tracking-wide text-ink/40 mt-6 mb-2">Collections</p>
               <div className="flex flex-col">
-                {categories.map((c) => (
-                  <Link
-                    key={c.slug}
-                    href={`/category/${c.slug}`}
-                    onClick={() => setMenuOpen(false)}
-                    className="flex items-center justify-between h-12 px-3 -mx-3 text-sm hover:bg-bone transition-colors"
-                  >
-                    <span className="uppercase tracking-wide">{c.label}</span>
-                    <ChevronRight />
-                  </Link>
-                ))}
+                {categories.map((c) => {
+                  const isOpen = expandedSlug === c.slug;
+                  const products = productsByCategory[c.slug];
+
+                  return (
+                    <div key={c.slug} className={isOpen ? "bg-bone -mx-3 px-3" : ""}>
+                      <button
+                        onClick={() => toggleCategory(c.slug)}
+                        className="w-full flex items-center justify-between h-12 text-sm hover:opacity-70 transition-opacity"
+                      >
+                        <span className="uppercase tracking-wide">{c.label}</span>
+                        <ChevronDown open={isOpen} />
+                      </button>
+
+                      {isOpen && (
+                        <div className="pb-3 pl-1 flex flex-col">
+                          {loadingSlug === c.slug && (
+                            <p className="text-xs text-ink/40 py-2">Loading...</p>
+                          )}
+                          {products?.length === 0 && loadingSlug !== c.slug && (
+                            <p className="text-xs text-ink/40 py-2">No products in this category yet.</p>
+                          )}
+                          {products?.map((p) => (
+                            <Link
+                              key={p.slug}
+                              href={`/product/${p.slug}`}
+                              onClick={() => setMenuOpen(false)}
+                              className="text-xs uppercase tracking-wide text-ink/70 py-2.5 hover:text-ink transition-colors"
+                            >
+                              {p.name}
+                            </Link>
+                          ))}
+                          <Link
+                            href={`/category/${c.slug}`}
+                            onClick={() => setMenuOpen(false)}
+                            className="text-xs text-ink/40 underline underline-offset-4 pt-1.5"
+                          >
+                            View all
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 {categories.length === 0 && <p className="text-sm text-ink/40 px-3">No categories yet.</p>}
               </div>
             </div>

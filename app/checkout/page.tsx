@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -9,9 +10,6 @@ import AddressAutocomplete, { AddressParts } from "@/components/AddressAutocompl
 import { formatNaira } from "@/lib/format";
 import { ProductDTO } from "@/lib/types";
 
-// Posts PAY_REQUEST_ID + CHECKSUM to PayGate's hosted page, same as the
-// PartyWithZell integration. Building and submitting a real <form> (rather
-// than fetch + redirect) is required here — PayGate expects a browser POST.
 function redirectToPaygate(payRequestId: string, checksum: string) {
   const form = document.createElement("form");
   form.method = "POST";
@@ -48,12 +46,14 @@ function Field({ label, optional, children }: { label: string; optional?: boolea
 }
 
 export default function CheckoutPage({ searchParams }: { searchParams: { product?: string } }) {
+  const router = useRouter();
   const { data: session, status } = useSession();
   const loggedIn = status === "authenticated";
   const verified = session?.user?.emailVerified ?? false;
 
   const [product, setProduct] = useState<ProductDTO | null>(null);
   const [loadingProduct, setLoadingProduct] = useState(true);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
   const [senderName, setSenderName] = useState("");
   const [senderPhone, setSenderPhone] = useState("");
@@ -67,7 +67,7 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
   const [addrState, setAddrState] = useState("");
   const [country, setCountry] = useState("");
 
-  const [paying, setPaying] = useState(false);
+  const [paying, setPaying] = useState<"paygate" | "wallet" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent">("idle");
 
@@ -87,6 +87,15 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
       .finally(() => setLoadingProduct(false));
   }, [searchParams?.product]);
 
+  useEffect(() => {
+    if (loggedIn) {
+      fetch("/api/wallet")
+        .then((r) => r.json())
+        .then((data) => setWalletBalance(data.balance ?? 0))
+        .catch(() => setWalletBalance(0));
+    }
+  }, [loggedIn]);
+
   const handleAddressSelect = useCallback((address: AddressParts) => {
     setStreet(address.street);
     setCity(address.city);
@@ -100,28 +109,35 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
     setResendStatus("sent");
   }
 
-  async function handlePurchase() {
-    if (!loggedIn || !verified || !product) return;
-
+  function validateFields() {
     if (!senderName || !senderPhone || !email || !recipientName || !street || !city || !addrState || !country) {
       setError("Fill in all required fields.");
-      return;
+      return false;
     }
+    return true;
+  }
+
+  function orderPayload() {
+    return {
+      productSlug: product!.slug,
+      sender: { name: senderName, phone: senderPhone, email },
+      recipient: { name: recipientName, phone: recipientPhone || undefined },
+      loveNote: loveNote || undefined,
+      address: { street, apartment: apartment || undefined, city, state: addrState, country }
+    };
+  }
+
+  async function handlePurchase() {
+    if (!loggedIn || !verified || !product || !validateFields()) return;
 
     setError(null);
-    setPaying(true);
+    setPaying("paygate");
 
     try {
       const orderRes = await fetch("/api/orders/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productSlug: product.slug,
-          sender: { name: senderName, phone: senderPhone, email },
-          recipient: { name: recipientName, phone: recipientPhone || undefined },
-          loveNote: loveNote || undefined,
-          address: { street, apartment: apartment || undefined, city, state: addrState, country }
-        })
+        body: JSON.stringify(orderPayload())
       });
       const order = await orderRes.json();
       if (!orderRes.ok) throw new Error(order.error ?? "Could not create order.");
@@ -137,9 +153,33 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
       redirectToPaygate(pay.payRequestId, pay.checksum);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
-      setPaying(false);
+      setPaying(null);
     }
   }
+
+  async function handlePayWithWallet() {
+    if (!loggedIn || !verified || !product || !validateFields()) return;
+
+    setError(null);
+    setPaying("wallet");
+
+    try {
+      const res = await fetch("/api/orders/pay-with-wallet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderPayload())
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not complete payment.");
+
+      router.push(`/checkout/return?REFERENCE=${data.reference}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setPaying(null);
+    }
+  }
+
+  const canPayWithWallet = walletBalance !== null && product !== null && walletBalance >= product.price;
 
   return (
     <>
@@ -201,7 +241,6 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
               <div className="grid gap-4">
                 <Field label="Street address">
                   <AddressAutocomplete className={inputClass} onSelect={handleAddressSelect} />
-                  {/* AddressAutocomplete owns its own input; keep street in sync via manual entry too */}
                   <input
                     className={`${inputClass} mt-2`}
                     placeholder="Street address (auto-filled above, editable)"
@@ -245,6 +284,10 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
               <span>{formatNaira(product?.price ?? 0)}</span>
             </div>
 
+            {loggedIn && walletBalance !== null && (
+              <p className="text-xs text-ink/40 mt-2">Wallet balance: {formatNaira(walletBalance)}</p>
+            )}
+
             {error && <p className="text-xs text-red-700 mt-3">{error}</p>}
 
             {loggedIn && !verified && (
@@ -265,13 +308,24 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
               </div>
             )}
 
+            {canPayWithWallet && (
+              <button
+                type="button"
+                disabled={!!paying || !loggedIn || !verified}
+                onClick={handlePayWithWallet}
+                className="mt-5 w-full border border-ink text-ink py-4 text-sm hover:bg-ink hover:text-paper transition-colors disabled:opacity-50"
+              >
+                {paying === "wallet" ? "Processing..." : "Pay with wallet balance"}
+              </button>
+            )}
+
             <button
               type="button"
-              disabled={paying || !loggedIn || !verified || !product}
+              disabled={!!paying || !loggedIn || !verified || !product}
               onClick={handlePurchase}
-              className="mt-5 w-full bg-ink text-paper py-4 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="mt-3 w-full bg-ink text-paper py-4 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {paying ? "Redirecting to PayGate..." : !loggedIn ? "Log in to purchase" : "Purchase now"}
+              {paying === "paygate" ? "Redirecting to PayGate..." : !loggedIn ? "Log in to purchase" : "Purchase now"}
             </button>
             <p className="text-xs text-ink/40 mt-2 text-center">
               {loggedIn ? (

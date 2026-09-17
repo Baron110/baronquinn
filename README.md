@@ -76,12 +76,25 @@ Then log in at `/login` and visit `/admin`.
 - `Order` — full snapshot of a checkout (sender, recipient, love note, address,
   product, amount, PayGate reference, status)
 
+**Wallet** (`/wallet`)
+- Deposit funds via PayGate (same hosted flow as checkout), stored as a balance on
+  the `User` document
+- Checkout offers "Pay with wallet balance" as an instant, no-redirect option
+  whenever the balance covers the order — the PayGate button stays available too
+- `models/WalletTransaction.ts` logs every deposit and debit; the wallet page shows
+  balance, total transactions, total spent, and a recent-activity table
+- The header shows the logged-in user's balance next to the cart icon, linking to
+  `/wallet`
+
 **Payments** (`lib/paygate.ts`, `app/api/paygate/`)
 - Hosted PayWeb3 flow, restricted to bank transfer (`PAY_METHOD=BT`) to match the
   PartyWithZell checkout
-- `notify` webhook is the source of truth — updates the `Order` status and sends
-  the confirmation email; `checkout/return` re-reads that status from Mongo rather
-  than trusting the redirect alone
+- `notify` webhook is the source of truth for both flows — it tells apart an order
+  payment from a wallet deposit by the reference prefix (`wallet-...` = deposit,
+  anything else = order), updates the right record, and sends the confirmation
+  email for order payments
+- `checkout/return` re-reads status from Mongo (Order or WalletTransaction,
+  depending on the reference) rather than trusting the redirect alone
 
 ## Not built yet
 - Cart / multi-item checkout — still single-product via `?product=slug`
@@ -90,6 +103,8 @@ Then log in at `/login` and visit `/admin`.
   existing `PATCH` endpoint)
 - Search (`/search`, linked from the header) has no route yet
 - No pagination anywhere (admin orders caps at 200, fine for now)
+- No admin view of wallet balances/deposits across all users — each user only sees
+  their own
 - Resend/Cloudinary/Google Places all silently degrade if their env vars are
   missing (logs a warning, or shows a manual-entry fallback) rather than crashing —
   worth testing each once real keys are in

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connectDB } from "@/lib/mongodb";
 import Order from "@/models/Order";
+import WalletTransaction from "@/models/WalletTransaction";
 
 export default async function CheckoutReturnPage({
   searchParams
@@ -8,17 +9,26 @@ export default async function CheckoutReturnPage({
   searchParams: { REFERENCE?: string };
 }) {
   let status: "paid" | "failed" | "pending" | "unknown" = "unknown";
+  const isWalletDeposit = searchParams?.REFERENCE?.startsWith("wallet-");
 
   if (searchParams?.REFERENCE) {
     await connectDB();
-    const order = await Order.findOne({ reference: searchParams.REFERENCE }).lean();
-    if (order) status = (order as any).status;
+
+    if (isWalletDeposit) {
+      const tx = await WalletTransaction.findOne({ reference: searchParams.REFERENCE }).lean();
+      if (tx) status = (tx as any).status === "completed" ? "paid" : (tx as any).status;
+    } else {
+      const order = await Order.findOne({ reference: searchParams.REFERENCE }).lean();
+      if (order) status = (order as any).status;
+    }
   }
 
   const copy = {
     paid: {
-      title: "Payment received",
-      body: "Thank you — your gift is on its way. A confirmation has been sent to your email."
+      title: isWalletDeposit ? "Wallet topped up" : "Payment received",
+      body: isWalletDeposit
+        ? "Your balance has been credited — you're ready to send gifts instantly from your wallet."
+        : "Thank you — your gift is on its way. A confirmation has been sent to your email."
     },
     pending: {
       title: "Payment processing",
@@ -30,7 +40,7 @@ export default async function CheckoutReturnPage({
     },
     unknown: {
       title: "Payment status unavailable",
-      body: "We couldn't find this order. If you completed a payment, check your email for confirmation."
+      body: "We couldn't find this transaction. If you completed a payment, check your email for confirmation."
     }
   }[status];
 
@@ -42,12 +52,22 @@ export default async function CheckoutReturnPage({
         {searchParams?.REFERENCE && (
           <p className="text-xs text-ink/40 mt-3">Reference: {searchParams.REFERENCE}</p>
         )}
-        <Link
-          href="/"
-          className="inline-block mt-6 border border-ink px-6 py-3 text-sm hover:bg-ink hover:text-paper transition-colors"
-        >
-          Back to home
-        </Link>
+        <div className="flex gap-3 justify-center mt-6">
+          {isWalletDeposit && (
+            <Link
+              href="/wallet"
+              className="border border-ink px-6 py-3 text-sm hover:bg-ink hover:text-paper transition-colors"
+            >
+              View wallet
+            </Link>
+          )}
+          <Link
+            href="/"
+            className="bg-ink text-paper px-6 py-3 text-sm hover:opacity-90 transition-opacity"
+          >
+            Back to home
+          </Link>
+        </div>
       </div>
     </div>
   );
