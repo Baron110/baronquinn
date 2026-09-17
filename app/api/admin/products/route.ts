@@ -6,6 +6,8 @@ import Category from "@/models/Category";
 
 void Category;
 
+export const dynamic = "force-dynamic";
+
 function slugify(text: string) {
   return text
     .toLowerCase()

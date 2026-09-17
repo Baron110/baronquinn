@@ -3,6 +3,8 @@ import { requireAdmin } from "@/lib/adminGuard";
 import { connectDB } from "@/lib/mongodb";
 import Category from "@/models/Category";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const { error } = await requireAdmin();
   if (error) return error;

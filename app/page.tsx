@@ -3,6 +3,9 @@ import Footer from "@/components/Footer";
 import CategoryRow from "@/components/CategoryRow";
 import { getCategories, getActiveProducts } from "@/lib/catalog";
 
+// This page reads Mongo directly (not via fetch), so Next.js would otherwise
+// statically generate it once at build time and freeze it there — any product
+// added through admin afterward wouldn't show up until the next deploy.
 export const dynamic = "force-dynamic";
 
 export default async function Home() {

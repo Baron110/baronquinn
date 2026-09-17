@@ -6,6 +6,8 @@ import { ProductDTO } from "@/lib/types";
 
 void Category;
 
+export const dynamic = "force-dynamic";
+
 function toDTO(p: any): ProductDTO {
   return {
     id: p._id.toString(),

@@ -43,6 +43,17 @@ export default function AdminCategories() {
     }
   }
 
+  async function handleDelete(c: Category) {
+    if (!confirm(`Delete "${c.label}"?`)) return;
+    const res = await fetch(`/api/admin/categories/${c._id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error ?? "Could not delete category");
+      return;
+    }
+    load();
+  }
+
   const inputClass = "w-full h-10 px-3 border border-line text-sm focus:outline-none focus:border-ink bg-paper";
 
   return (
@@ -52,12 +63,17 @@ export default function AdminCategories() {
       <div className="border border-line divide-y divide-line mb-10">
         {categories.length === 0 && <p className="p-4 text-sm text-ink/40">No categories yet.</p>}
         {categories.map((c) => (
-          <div key={c._id} className="p-4 flex justify-between text-sm">
+          <div key={c._id} className="p-4 flex justify-between items-center text-sm">
             <div>
               <p>{c.label}</p>
               <p className="text-ink/40 text-xs">{c.slug}</p>
             </div>
-            {c.blurb && <p className="text-ink/50 text-xs max-w-xs">{c.blurb}</p>}
+            <div className="flex items-center gap-4">
+              {c.blurb && <p className="text-ink/50 text-xs max-w-xs hidden sm:block">{c.blurb}</p>}
+              <button onClick={() => handleDelete(c)} className="text-xs text-red-700">
+                Delete
+              </button>
+            </div>
           </div>
         ))}
       </div>
