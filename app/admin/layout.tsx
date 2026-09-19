@@ -1,7 +1,19 @@
+import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
 import Link from "next/link";
+import { authOptions } from "@/lib/auth";
 import Header from "@/components/Header";
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  // Defense in depth: middleware.ts already blocks non-admins from reaching
+  // /admin/*, but every admin page checks again here directly against the
+  // session, so a middleware misconfiguration alone can never be the only
+  // thing standing between a regular user and this panel.
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "admin") {
+    redirect("/");
+  }
+
   return (
     <>
       <Header />

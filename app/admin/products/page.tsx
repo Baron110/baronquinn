@@ -72,6 +72,9 @@ export default function AdminProducts() {
               <button onClick={() => toggleActive(p)} className="text-xs border border-line px-3 py-1.5 hover:border-ink">
                 {p.active ? "Active" : "Hidden"}
               </button>
+              <Link href={`/admin/products/${p._id}/edit`} className="text-xs underline underline-offset-4">
+                Edit
+              </Link>
               <button onClick={() => remove(p)} className="text-xs text-red-700 px-2">
                 Delete
               </button>

@@ -1,9 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ProductCard from "@/components/ProductCard";
+import ImageGallery from "@/components/ImageGallery";
 import { getProductBySlug } from "@/lib/catalog";
 import { formatNaira } from "@/lib/format";
 
@@ -14,7 +14,6 @@ export default async function ProductPage({ params }: { params: { slug: string }
   if (!data) return notFound();
 
   const { product, related } = data;
-  const image = product.images?.[0];
 
   return (
     <>
@@ -25,19 +24,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
         </Link>
 
         <div className="mt-6 grid md:grid-cols-2 gap-10">
-          <div className="relative aspect-[4/5] bg-bone">
-            {image ? (
-              <Image
-                src={image}
-                alt={product.name}
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 50vw"
-              />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-ink/20 text-sm">No photo</div>
-            )}
-          </div>
+          <ImageGallery images={product.images ?? []} alt={product.name} />
 
           <div className="max-w-md">
             <h1 className="text-3xl">{product.name}</h1>

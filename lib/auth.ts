@@ -40,6 +40,18 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = (user as any).id;
         token.role = (user as any).role;
+      } else if (token.id) {
+        // Re-check role on every token refresh, not just at sign-in — without
+        // this, promoting or demoting someone via the create-admin script had
+        // no effect until they logged out and back in, since the JWT kept
+        // whatever role it was issued with.
+        try {
+          await connectDB();
+          const dbUser = await User.findById(token.id).select("role");
+          if (dbUser) token.role = dbUser.role;
+        } catch {
+          // Leave the existing token.role as a fallback if Mongo is briefly unreachable.
+        }
       }
       return token;
     },
