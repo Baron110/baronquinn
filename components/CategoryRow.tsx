@@ -13,9 +13,9 @@ export default function CategoryRow({
 }) {
   if (items.length === 0) return null;
 
-  // Auto-scrolls vertically on its own, same technique as the hero pill
-  // marquee (duplicated content, looping translateY). Only worth animating
-  // once there's more than one item — otherwise it's just a static card.
+  // Auto-scrolls horizontally, right to left, same technique as the hero
+  // pill marquee (duplicated content, looping translateX). Only worth
+  // animating once there's more than one item.
   const shouldScroll = items.length > 1;
 
   return (
@@ -28,10 +28,12 @@ export default function CategoryRow({
       </div>
 
       {shouldScroll ? (
-        <div className="h-[420px] sm:h-[480px] lg:h-[520px] overflow-hidden">
-          <div className="animate-marquee-vertical grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-8">
+        <div className="overflow-hidden">
+          <div className="flex gap-5 w-max animate-marquee">
             {[...items, ...items].map((p, i) => (
-              <ProductCard key={`${p.slug}-${i}`} product={p} />
+              <div key={`${p.slug}-${i}`} className="w-40 sm:w-52 shrink-0">
+                <ProductCard product={p} />
+              </div>
             ))}
           </div>
         </div>
