@@ -30,14 +30,17 @@ export default function CategoryRow({
 
       {shouldScroll ? (
         <Marquee
-          items={items}
           speed={30}
-          keyFn={(p) => p.slug}
-          renderItem={(p) => (
-            <div className="w-40 sm:w-52">
+          firstCopy={items.map((p) => (
+            <div key={p.slug} className="w-40 sm:w-52">
               <ProductCard product={p} />
             </div>
-          )}
+          ))}
+          secondCopy={items.map((p) => (
+            <div key={`${p.slug}-dup`} className="w-40 sm:w-52">
+              <ProductCard product={p} />
+            </div>
+          ))}
         />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-8">

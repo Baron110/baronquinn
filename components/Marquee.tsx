@@ -2,22 +2,18 @@
 
 import { useEffect, useRef } from "react";
 
-// Renders `items` twice back-to-back and auto-scrolls through them,
-// looping seamlessly. The loop point is measured directly (the second
-// copy's actual on-screen position) rather than computed from
-// scrollWidth/2 — dividing by 2 doesn't account for flex gaps correctly
-// and was causing a small jump every cycle that looked like products
-// were disappearing/duplicating rather than a smooth loop.
-export default function Marquee<T>({
-  items,
-  renderItem,
-  keyFn,
+// The caller (usually a Server Component) renders the two copies of content
+// itself and hands over the resulting JSX — not a function — because Next.js
+// doesn't allow passing functions from a Server Component into a Client
+// Component as props.
+export default function Marquee({
+  firstCopy,
+  secondCopy,
   speed = 35,
   gapClassName = "gap-5"
 }: {
-  items: T[];
-  renderItem: (item: T, index: number) => React.ReactNode;
-  keyFn: (item: T, index: number) => string;
+  firstCopy: React.ReactNode;
+  secondCopy: React.ReactNode;
   speed?: number; // pixels per second
   gapClassName?: string;
 }) {
@@ -55,16 +51,12 @@ export default function Marquee<T>({
     if (resumeTimeout.current) clearTimeout(resumeTimeout.current);
   }
 
-  // Gives the user a couple seconds after they let go before the automatic
-  // motion picks back up, so it doesn't fight their finger mid-swipe.
   function scheduleResume() {
     if (resumeTimeout.current) clearTimeout(resumeTimeout.current);
     resumeTimeout.current = setTimeout(() => {
       pausedRef.current = false;
     }, 2500);
   }
-
-  if (items.length === 0) return null;
 
   return (
     <div
@@ -76,19 +68,9 @@ export default function Marquee<T>({
       onTouchEnd={scheduleResume}
       className={`flex ${gapClassName} overflow-x-auto scrollbar-hide`}
     >
-      <div className={`flex ${gapClassName} shrink-0`}>
-        {items.map((item, i) => (
-          <div key={keyFn(item, i)} className="shrink-0">
-            {renderItem(item, i)}
-          </div>
-        ))}
-      </div>
+      <div className={`flex ${gapClassName} shrink-0`}>{firstCopy}</div>
       <div ref={secondCopyRef} className={`flex ${gapClassName} shrink-0`} aria-hidden="true">
-        {items.map((item, i) => (
-          <div key={`${keyFn(item, i)}-dup`} className="shrink-0">
-            {renderItem(item, i)}
-          </div>
-        ))}
+        {secondCopy}
       </div>
     </div>
   );
