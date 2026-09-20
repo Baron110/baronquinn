@@ -28,3 +28,20 @@ h1, h2, h3 {
 .animate-marquee:hover {
   animation-play-state: paused;
 }
+
+@keyframes marquee-scroll-y {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+
+.animate-marquee-vertical {
+  animation: marquee-scroll-y 26s linear infinite;
+}
+
+.animate-marquee-vertical:hover {
+  animation-play-state: paused;
+}

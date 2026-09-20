@@ -132,7 +132,7 @@ export default function Header() {
             <div className="flex items-center gap-3 shrink-0">
               {session?.user?.role === "admin" && (
                 <Link
-                  href="/admin"
+                  href="/08088adminpanel"
                   className="hidden sm:block text-sm border border-ink px-4 h-10 leading-10 hover:bg-ink hover:text-paper transition-colors"
                 >
                   Admin

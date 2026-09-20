@@ -33,7 +33,6 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-bone px-5 py-16">
       <div className="w-full max-w-md bg-paper border border-line rounded-2xl shadow-sm p-8">
         <Link href="/" className="flex items-center gap-2 mb-8">
-          <span className="text-xl">🎁</span>
           <span className="font-display text-xl tracking-tight">Baronquinn</span>
         </Link>
 
