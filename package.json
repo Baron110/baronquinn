@@ -10,6 +10,7 @@
     "create-admin": "node scripts/create-admin.js",
     "seed": "node scripts/seed.js",
     "import-photos": "node scripts/import-photos.js",
+    "import-batch2": "node scripts/import-products-batch2.js",
     "update-durations": "node scripts/update-durations.js"
   },
   "dependencies": {

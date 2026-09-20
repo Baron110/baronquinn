@@ -44,12 +44,19 @@ export default function AdminProducts() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-2">
         <h1 className="text-3xl">Products</h1>
         <Link href="/08088adminpanel/products/new" className="border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper transition-colors">
           + New product
         </Link>
       </div>
+
+      {!loading && (
+        <p className="text-sm text-ink/50 mb-6">
+          {products.length} total · {products.filter((p) => p.active).length} active ·{" "}
+          {products.filter((p) => !p.active).length} hidden
+        </p>
+      )}
 
       {loading ? (
         <p className="text-ink/40">Loading...</p>

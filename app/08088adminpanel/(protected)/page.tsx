@@ -11,6 +11,8 @@ type Revenue = {
   daily: { _id: string; revenue: number; orders: number }[];
 };
 
+type Product = { active: boolean };
+
 function Card({ label, value }: { label: string; value: string }) {
   return (
     <div className="border border-line p-5">
@@ -22,12 +24,18 @@ function Card({ label, value }: { label: string; value: string }) {
 
 export default function AdminDashboard() {
   const [data, setData] = useState<Revenue | null>(null);
+  const [products, setProducts] = useState<Product[] | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/revenue")
       .then((r) => r.json())
       .then(setData);
+    fetch("/api/admin/products")
+      .then((r) => r.json())
+      .then(setProducts);
   }, []);
+
+  const activeCount = products?.filter((p) => p.active).length ?? 0;
 
   return (
     <div>
@@ -37,11 +45,12 @@ export default function AdminDashboard() {
         <p className="text-ink/40">Loading...</p>
       ) : (
         <>
-          <div className="grid sm:grid-cols-4 gap-4">
+          <div className="grid sm:grid-cols-5 gap-4">
             <Card label="Total revenue" value={formatNaira(data.totalRevenue)} />
             <Card label="Paid orders" value={String(data.paidOrders)} />
             <Card label="Pending" value={String(data.pendingCount)} />
             <Card label="Failed" value={String(data.failedCount)} />
+            <Card label="Products available" value={products ? String(activeCount) : "..."} />
           </div>
 
           <section className="mt-10">
