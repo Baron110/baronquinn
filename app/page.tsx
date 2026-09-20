@@ -1,6 +1,7 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import CategoryRow from "@/components/CategoryRow";
+import Marquee from "@/components/Marquee";
 import { getCategories, getActiveProducts } from "@/lib/catalog";
 
 // This page reads Mongo directly (not via fetch), so Next.js would otherwise
@@ -24,18 +25,20 @@ export default async function Home() {
           </p>
 
           {categories.length > 0 && (
-            <div className="mt-8 overflow-hidden">
-              <div className="flex gap-3 w-max animate-marquee">
-                {[...categories, ...categories].map((c, i) => (
-                  <a
-                    key={`${c.slug}-${i}`}
-                    href={`/category/${c.slug}`}
-                    className="text-sm border border-ink px-4 py-2 whitespace-nowrap hover:bg-ink hover:text-paper transition-colors"
-                  >
-                    {c.label}
-                  </a>
-                ))}
-              </div>
+            <div className="mt-8">
+              <Marquee speed={30}>
+                <div className="flex gap-3 w-max">
+                  {[...categories, ...categories].map((c, i) => (
+                    <a
+                      key={`${c.slug}-${i}`}
+                      href={`/category/${c.slug}`}
+                      className="text-sm border border-ink px-4 py-2 whitespace-nowrap hover:bg-ink hover:text-paper transition-colors"
+                    >
+                      {c.label}
+                    </a>
+                  ))}
+                </div>
+              </Marquee>
             </div>
           )}
         </section>

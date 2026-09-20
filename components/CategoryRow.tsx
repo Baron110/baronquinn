@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ProductDTO } from "@/lib/types";
 import ProductCard from "./ProductCard";
+import Marquee from "./Marquee";
 
 export default function CategoryRow({
   label,
@@ -13,9 +14,9 @@ export default function CategoryRow({
 }) {
   if (items.length === 0) return null;
 
-  // Auto-scrolls horizontally, right to left, same technique as the hero
-  // pill marquee (duplicated content, looping translateX). Only worth
-  // animating once there's more than one item.
+  // Auto-scrolls horizontally, right to left — but it's a real scrollable
+  // container (not just a CSS animation), so swiping or dragging it by hand
+  // works too and just pauses the automatic motion for a couple seconds.
   const shouldScroll = items.length > 1;
 
   return (
@@ -28,15 +29,15 @@ export default function CategoryRow({
       </div>
 
       {shouldScroll ? (
-        <div className="overflow-hidden">
-          <div className="flex gap-5 w-max animate-marquee">
+        <Marquee speed={25}>
+          <div className="flex gap-5 w-max">
             {[...items, ...items].map((p, i) => (
               <div key={`${p.slug}-${i}`} className="w-40 sm:w-52 shrink-0">
                 <ProductCard product={p} />
               </div>
             ))}
           </div>
-        </div>
+        </Marquee>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-8">
           {items.map((p) => (

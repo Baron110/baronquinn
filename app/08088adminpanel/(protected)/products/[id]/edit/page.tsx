@@ -147,11 +147,22 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
           </div>
           <div>
             <label className="text-xs uppercase tracking-wide text-ink/50">Delivery duration</label>
-            <select className={`${inputClass} mt-1.5`} value={duration} onChange={(e) => setDuration(e.target.value)}>
-              <option>Same day</option>
-              <option>1-2 days</option>
-              <option>3-5 days</option>
-            </select>
+            <input
+              className={`${inputClass} mt-1.5`}
+              list="duration-suggestions"
+              placeholder="e.g. 1-2 days, or 7-14 days (1-2 days to USA)"
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+            />
+            <datalist id="duration-suggestions">
+              <option value="Same day" />
+              <option value="Same day (30 minutes)" />
+              <option value="1-2 days" />
+              <option value="1-3 days" />
+              <option value="3-5 days" />
+              <option value="7-14 days" />
+              <option value="7-14 days (1-2 days to USA)" />
+            </datalist>
           </div>
         </div>
 
