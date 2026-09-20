@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "create-admin": "node scripts/create-admin.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "import-photos": "node scripts/import-photos.js"
   },
   "dependencies": {
     "next": "14.2.5",
