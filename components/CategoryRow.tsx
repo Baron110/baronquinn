@@ -29,15 +29,16 @@ export default function CategoryRow({
       </div>
 
       {shouldScroll ? (
-        <Marquee speed={25}>
-          <div className="flex gap-5 w-max">
-            {[...items, ...items].map((p, i) => (
-              <div key={`${p.slug}-${i}`} className="w-40 sm:w-52 shrink-0">
-                <ProductCard product={p} />
-              </div>
-            ))}
-          </div>
-        </Marquee>
+        <Marquee
+          items={items}
+          speed={30}
+          keyFn={(p) => p.slug}
+          renderItem={(p) => (
+            <div className="w-40 sm:w-52">
+              <ProductCard product={p} />
+            </div>
+          )}
+        />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-8">
           {items.map((p) => (
