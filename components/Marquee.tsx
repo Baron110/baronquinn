@@ -2,24 +2,23 @@
 
 import { useEffect, useRef } from "react";
 
-// The caller (usually a Server Component) renders the two copies of content
-// itself and hands over the resulting JSX — not a function — because Next.js
-// doesn't allow passing functions from a Server Component into a Client
-// Component as props.
+// Deliberately simple: renders children exactly once (no duplicated-content
+// loop trick — that was the source of "products repeating" when a category
+// had few items) and just nudges scrollLeft back and forth between the two
+// ends. It's a real overflow-x-auto container, so touch/drag scrolling
+// works for free from the browser — nothing custom needed for that part.
 export default function Marquee({
-  firstCopy,
-  secondCopy,
-  speed = 35,
+  children,
+  speed = 40,
   gapClassName = "gap-5"
 }: {
-  firstCopy: React.ReactNode;
-  secondCopy: React.ReactNode;
+  children: React.ReactNode;
   speed?: number; // pixels per second
   gapClassName?: string;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const secondCopyRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(false);
+  const directionRef = useRef<1 | -1>(1);
   const resumeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -28,15 +27,20 @@ export default function Marquee({
 
     function step(now: number) {
       const el = scrollerRef.current;
-      const second = secondCopyRef.current;
       const dt = (now - last) / 1000;
       last = now;
 
-      if (el && second && !pausedRef.current) {
-        el.scrollLeft += speed * dt;
-        const loopPoint = second.offsetLeft;
-        if (loopPoint > 0 && el.scrollLeft >= loopPoint) {
-          el.scrollLeft -= loopPoint;
+      if (el && !pausedRef.current) {
+        const max = el.scrollWidth - el.clientWidth;
+        if (max > 0) {
+          el.scrollLeft += speed * dt * directionRef.current;
+          if (el.scrollLeft >= max) {
+            el.scrollLeft = max;
+            directionRef.current = -1;
+          } else if (el.scrollLeft <= 0) {
+            el.scrollLeft = 0;
+            directionRef.current = 1;
+          }
         }
       }
       raf = requestAnimationFrame(step);
@@ -68,10 +72,7 @@ export default function Marquee({
       onTouchEnd={scheduleResume}
       className={`flex ${gapClassName} overflow-x-auto scrollbar-hide`}
     >
-      <div className={`flex ${gapClassName} shrink-0`}>{firstCopy}</div>
-      <div ref={secondCopyRef} className={`flex ${gapClassName} shrink-0`} aria-hidden="true">
-        {secondCopy}
-      </div>
+      {children}
     </div>
   );
 }

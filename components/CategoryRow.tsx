@@ -14,9 +14,8 @@ export default function CategoryRow({
 }) {
   if (items.length === 0) return null;
 
-  // Auto-scrolls horizontally, right to left — but it's a real scrollable
-  // container (not just a CSS animation), so swiping or dragging it by hand
-  // works too and just pauses the automatic motion for a couple seconds.
+  // Gently auto-scrolls back and forth to hint there's more — a real
+  // scrollable strip, so dragging/swiping it by hand works natively too.
   const shouldScroll = items.length > 1;
 
   return (
@@ -29,19 +28,13 @@ export default function CategoryRow({
       </div>
 
       {shouldScroll ? (
-        <Marquee
-          speed={30}
-          firstCopy={items.map((p) => (
-            <div key={p.slug} className="w-40 sm:w-52">
+        <Marquee speed={30}>
+          {items.map((p) => (
+            <div key={p.slug} className="w-40 sm:w-52 shrink-0">
               <ProductCard product={p} />
             </div>
           ))}
-          secondCopy={items.map((p) => (
-            <div key={`${p.slug}-dup`} className="w-40 sm:w-52">
-              <ProductCard product={p} />
-            </div>
-          ))}
-        />
+        </Marquee>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-8">
           {items.map((p) => (
