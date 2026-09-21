@@ -8,7 +8,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AddressAutocomplete, { AddressParts } from "@/components/AddressAutocomplete";
 import { formatNaira } from "@/lib/format";
-import { ProductDTO } from "@/lib/types";
+import { useCart } from "@/lib/cart-context";
 
 function redirectToPaygate(payRequestId: string, checksum: string) {
   const form = document.createElement("form");
@@ -45,14 +45,13 @@ function Field({ label, optional, children }: { label: string; optional?: boolea
   );
 }
 
-export default function CheckoutPage({ searchParams }: { searchParams: { product?: string } }) {
+export default function CheckoutPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { items: cartItems, totalPrice, clearCart } = useCart();
   const loggedIn = status === "authenticated";
   const verified = session?.user?.emailVerified ?? false;
 
-  const [product, setProduct] = useState<ProductDTO | null>(null);
-  const [loadingProduct, setLoadingProduct] = useState(true);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
   const [senderName, setSenderName] = useState("");
@@ -77,17 +76,6 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
   }, [session]);
 
   useEffect(() => {
-    if (!searchParams?.product) {
-      setLoadingProduct(false);
-      return;
-    }
-    fetch(`/api/products/${searchParams.product}`)
-      .then((r) => r.json())
-      .then((data) => setProduct(data.product ?? null))
-      .finally(() => setLoadingProduct(false));
-  }, [searchParams?.product]);
-
-  useEffect(() => {
     if (loggedIn) {
       fetch("/api/wallet")
         .then((r) => r.json())
@@ -110,6 +98,10 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
   }
 
   function validateFields() {
+    if (cartItems.length === 0) {
+      setError("Your cart is empty.");
+      return false;
+    }
     if (!senderName || !senderPhone || !email || !recipientName || !street || !city || !addrState || !country) {
       setError("Fill in all required fields.");
       return false;
@@ -119,7 +111,7 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
 
   function orderPayload() {
     return {
-      productSlug: product!.slug,
+      items: cartItems.map((i) => ({ slug: i.slug, quantity: i.quantity })),
       sender: { name: senderName, phone: senderPhone, email },
       recipient: { name: recipientName, phone: recipientPhone || undefined },
       loveNote: loveNote || undefined,
@@ -128,7 +120,7 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
   }
 
   async function handlePurchase() {
-    if (!loggedIn || !verified || !product || !validateFields()) return;
+    if (!loggedIn || !verified || !validateFields()) return;
 
     setError(null);
     setPaying("paygate");
@@ -150,6 +142,9 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
       const pay = await payRes.json();
       if (!payRes.ok) throw new Error(pay.error ?? "Payment could not be started.");
 
+      // Cleared here (not after return) because the PayGate redirect leaves
+      // this app entirely — there's no later moment to clear it client-side.
+      clearCart();
       redirectToPaygate(pay.payRequestId, pay.checksum);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -158,7 +153,7 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
   }
 
   async function handlePayWithWallet() {
-    if (!loggedIn || !verified || !product || !validateFields()) return;
+    if (!loggedIn || !verified || !validateFields()) return;
 
     setError(null);
     setPaying("wallet");
@@ -172,6 +167,7 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not complete payment.");
 
+      clearCart();
       router.push(`/checkout/return?REFERENCE=${data.reference}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -179,17 +175,31 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
     }
   }
 
-  const canPayWithWallet = walletBalance !== null && product !== null && walletBalance >= product.price;
+  const canPayWithWallet = walletBalance !== null && cartItems.length > 0 && walletBalance >= totalPrice;
+
+  if (cartItems.length === 0) {
+    return (
+      <>
+        <Header />
+        <main className="max-w-content mx-auto px-5 py-20 text-center">
+          <p className="text-ink/60">Your cart is empty.</p>
+          <Link
+            href="/"
+            className="inline-block mt-6 border border-ink px-6 py-3 text-sm hover:bg-ink hover:text-paper transition-colors"
+          >
+            Browse gifts
+          </Link>
+        </main>
+        <Footer />
+      </>
+    );
+  }
 
   return (
     <>
       <Header />
       <main className="max-w-content mx-auto px-5 py-8">
         <h1 className="text-2xl mb-8">Complete order</h1>
-
-        {!loadingProduct && !product && (
-          <p className="text-sm text-red-700 mb-6">No product selected — go back and pick something to send.</p>
-        )}
 
         <div className="grid md:grid-cols-[1fr_320px] gap-10">
           <div className="space-y-10">
@@ -272,16 +282,21 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
           </div>
 
           <aside className="h-fit border border-line p-5 md:sticky md:top-24">
-            {product && (
-              <div className="flex items-center justify-between text-sm mb-4 pb-4 border-b border-line">
-                <span>{product.name}</span>
-                <span>{formatNaira(product.price)}</span>
-              </div>
-            )}
+            <div className="space-y-2 pb-4 mb-4 border-b border-line">
+              {cartItems.map((item) => (
+                <div key={item.slug} className="flex items-center justify-between text-sm">
+                  <span className="truncate pr-2">
+                    {item.name}
+                    {item.quantity > 1 ? ` × ${item.quantity}` : ""}
+                  </span>
+                  <span className="shrink-0">{formatNaira(item.price * item.quantity)}</span>
+                </div>
+              ))}
+            </div>
 
-            <div className="flex items-baseline justify-between text-lg pt-4 border-t border-line">
+            <div className="flex items-baseline justify-between text-lg">
               <span>Total</span>
-              <span>{formatNaira(product?.price ?? 0)}</span>
+              <span>{formatNaira(totalPrice)}</span>
             </div>
 
             {loggedIn && walletBalance !== null && (
@@ -321,7 +336,7 @@ export default function CheckoutPage({ searchParams }: { searchParams: { product
 
             <button
               type="button"
-              disabled={!!paying || !loggedIn || !verified || !product}
+              disabled={!!paying || !loggedIn || !verified}
               onClick={handlePurchase}
               className="mt-3 w-full bg-ink text-paper py-4 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
             >

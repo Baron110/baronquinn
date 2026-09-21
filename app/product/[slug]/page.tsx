@@ -4,10 +4,11 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ProductCard from "@/components/ProductCard";
 import ImageGallery from "@/components/ImageGallery";
+import AddToCartButton from "@/components/AddToCartButton";
 import { getProductBySlug } from "@/lib/catalog";
 import { formatNaira } from "@/lib/format";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function ProductPage({ params }: { params: { slug: string } }) {
   const data = await getProductBySlug(params.slug);
@@ -44,12 +45,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
             </div>
             <p className="text-xs text-ink/40 mt-3">Delivery to some locations may attract extra fees.</p>
 
-            <Link
-              href={`/checkout?product=${product.slug}`}
-              className="mt-8 block text-center bg-ink text-paper py-4 hover:opacity-90 transition-opacity"
-            >
-              Purchase now
-            </Link>
+            <AddToCartButton product={product} />
           </div>
         </div>
 

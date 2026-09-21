@@ -42,13 +42,33 @@ export async function sendVerificationEmail(to: string, name: string, token: str
 
 export async function sendOrderConfirmationEmail(
   to: string,
-  order: { productName: string; amount: number; reference: string; recipient: { name: string } }
+  order: {
+    items: { productName: string; price: number; quantity: number }[];
+    amount: number;
+    reference: string;
+    recipient: { name: string };
+  }
 ) {
   const resend = getResend();
   if (!resend) {
     console.warn("RESEND_API_KEY not set — skipping order confirmation email for", order.reference);
     return;
   }
+
+  const itemsSummary =
+    order.items.length === 1
+      ? order.items[0].productName
+      : `${order.items.length} items (${order.items.map((i) => i.productName).join(", ")})`;
+
+  const itemRows = order.items
+    .map(
+      (i) => `
+      <tr>
+        <td style="padding:4px 0;">${i.productName}${i.quantity > 1 ? ` &times; ${i.quantity}` : ""}</td>
+        <td style="padding:4px 0; text-align:right;">${formatNaira(i.price * i.quantity)}</td>
+      </tr>`
+    )
+    .join("");
 
   await resend.emails.send({
     from: FROM_EMAIL,
@@ -57,11 +77,12 @@ export async function sendOrderConfirmationEmail(
     html: wrapper(`
       <p style="font-size:16px;">Payment received — thank you.</p>
       <p style="font-size:14px; color:#555; line-height:1.6;">
-        ${order.productName} is on its way to ${order.recipient.name}.
+        ${itemsSummary} on its way to ${order.recipient.name}.
       </p>
       <table style="width:100%; margin-top:16px; font-size:13px; border-top:1px solid #E3E0D8; padding-top:16px;">
-        <tr><td style="color:#999;">Reference</td><td style="text-align:right;">${order.reference}</td></tr>
-        <tr><td style="color:#999;">Amount</td><td style="text-align:right;">${formatNaira(order.amount)}</td></tr>
+        ${itemRows}
+        <tr><td style="padding-top:8px; color:#999;">Reference</td><td style="padding-top:8px; text-align:right; color:#999;">${order.reference}</td></tr>
+        <tr><td style="font-weight:600;">Total</td><td style="text-align:right; font-weight:600;">${formatNaira(order.amount)}</td></tr>
       </table>
     `)
   });

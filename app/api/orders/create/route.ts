@@ -12,30 +12,45 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { productSlug, sender, recipient, loveNote, address } = body;
+  const { items: cartItems, sender, recipient, loveNote, address } = body;
 
-  if (!productSlug || !sender?.email || !sender?.name || !sender?.phone || !recipient?.name || !address?.street) {
+  if (!Array.isArray(cartItems) || cartItems.length === 0) {
+    return NextResponse.json({ error: "Your cart is empty" }, { status: 400 });
+  }
+  if (!sender?.email || !sender?.name || !sender?.phone || !recipient?.name || !address?.street) {
     return NextResponse.json({ error: "Missing required order fields" }, { status: 400 });
   }
 
   await connectDB();
 
-  const product = await Product.findOne({ slug: productSlug, active: true });
-  if (!product) {
-    return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  const orderItems = [];
+  let amount = 0;
+
+  for (const ci of cartItems) {
+    const product = await Product.findOne({ slug: ci.slug, active: true });
+    if (!product) {
+      return NextResponse.json({ error: `Product no longer available: ${ci.slug}` }, { status: 404 });
+    }
+    const quantity = Math.max(1, Number(ci.quantity) || 1);
+    orderItems.push({
+      product: product._id,
+      productSlug: product.slug,
+      productName: product.name,
+      price: product.price,
+      quantity
+    });
+    amount += product.price * quantity;
   }
 
   const order = await Order.create({
     user: session.user.id,
-    product: product._id,
-    productSlug: product.slug,
-    productName: product.name,
-    amount: product.price,
+    items: orderItems,
+    amount,
     sender,
     recipient,
     loveNote,
     address,
-    reference: `${product.slug}-${Date.now()}`,
+    reference: `order-${Date.now()}`,
     status: "pending"
   });
 

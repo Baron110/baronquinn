@@ -6,7 +6,7 @@ import { ProductDTO } from "@/lib/types";
 
 void Category;
 
-export const dynamic = "force-dynamic";
+export const revalidate = 45;
 
 function toDTO(p: any): ProductDTO {
   return {

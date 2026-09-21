@@ -8,7 +8,7 @@ import { ProductDTO } from "@/lib/types";
 // (Next's route-level module isolation can otherwise skip this registration).
 void Category;
 
-export const dynamic = "force-dynamic";
+export const revalidate = 45;
 
 export async function GET(req: NextRequest) {
   await connectDB();

@@ -67,7 +67,7 @@ async function handleOrderPayment(reference: string, approved: boolean) {
   if (approved) {
     try {
       await sendOrderConfirmationEmail(order.sender.email, {
-        productName: order.productName,
+        items: order.items,
         amount: order.amount,
         reference: order.reference,
         recipient: order.recipient

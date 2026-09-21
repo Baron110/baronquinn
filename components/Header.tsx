@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { CategoryDTO, ProductDTO } from "@/lib/types";
 import { formatNaira } from "@/lib/format";
+import { useCart } from "@/lib/cart-context";
 
 function HamburgerIcon() {
   return (
@@ -49,6 +50,7 @@ function ChevronDown({ open }: { open: boolean }) {
 
 export default function Header() {
   const { data: session, status } = useSession();
+  const { totalItems } = useCart();
   const [categories, setCategories] = useState<CategoryDTO[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
@@ -165,11 +167,16 @@ export default function Header() {
               )}
 
               <Link
-                href="/checkout"
+                href="/cart"
                 aria-label="Cart"
-                className="w-10 h-10 flex items-center justify-center border border-ink text-lg"
+                className="relative w-10 h-10 flex items-center justify-center border border-ink text-lg"
               >
                 🛒
+                {totalItems > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-ink text-paper text-[10px] leading-none rounded-full w-4 h-4 flex items-center justify-center">
+                    {totalItems > 9 ? "9+" : totalItems}
+                  </span>
+                )}
               </Link>
             </div>
           </div>

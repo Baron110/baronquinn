@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import Providers from "@/components/Providers";
+import { CartProvider } from "@/lib/cart-context";
 import "./globals.css";
 
 const display = Fraunces({
@@ -24,7 +25,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${display.variable} ${sans.variable} font-sans bg-paper text-ink antialiased`}>
-        <Providers>{children}</Providers>
+        <Providers>
+          <CartProvider>{children}</CartProvider>
+        </Providers>
       </body>
     </html>
   );

@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { formatNaira } from "@/lib/format";
 
+type OrderItem = { productName: string; price: number; quantity: number };
+
 type Order = {
   _id: string;
-  productName: string;
+  items: OrderItem[];
   amount: number;
   status: "pending" | "paid" | "failed" | "cancelled";
   sender: { name: string; email: string };
@@ -57,7 +59,11 @@ export default function AdminOrders() {
               {orders.map((o) => (
                 <tr key={o._id} className="border-b border-line last:border-b-0">
                   <td className="p-3 whitespace-nowrap">{new Date(o.createdAt).toLocaleDateString()}</td>
-                  <td className="p-3">{o.productName}</td>
+                  <td className="p-3">
+                    {o.items.length === 1
+                      ? `${o.items[0].productName}${o.items[0].quantity > 1 ? ` ×${o.items[0].quantity}` : ""}`
+                      : `${o.items.length} items`}
+                  </td>
                   <td className="p-3">
                     <p>{o.sender.name}</p>
                     <p className="text-xs text-ink/40">{o.sender.email}</p>

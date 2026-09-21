@@ -2,12 +2,18 @@ import { Schema, models, model, Types } from "mongoose";
 
 export type OrderStatus = "pending" | "paid" | "failed" | "cancelled";
 
-export interface IOrder {
-  user?: Types.ObjectId; // ref User
-  product?: Types.ObjectId; // ref Product, when it comes from the Mongo catalog
+export interface IOrderItem {
+  product?: Types.ObjectId; // ref Product
   productSlug: string;
   productName: string; // snapshot at time of order
-  amount: number;
+  price: number; // per-unit price at time of order
+  quantity: number;
+}
+
+export interface IOrder {
+  user?: Types.ObjectId; // ref User
+  items: IOrderItem[];
+  amount: number; // total across every line item
   sender: { name: string; phone: string; email: string };
   recipient: { name: string; phone?: string };
   loveNote?: string;
@@ -24,11 +30,20 @@ export interface IOrder {
   createdAt: Date;
 }
 
+const OrderItemSchema = new Schema<IOrderItem>(
+  {
+    product: { type: Schema.Types.ObjectId, ref: "Product" },
+    productSlug: { type: String, required: true },
+    productName: { type: String, required: true },
+    price: { type: Number, required: true },
+    quantity: { type: Number, required: true, default: 1 }
+  },
+  { _id: false }
+);
+
 const OrderSchema = new Schema<IOrder>({
   user: { type: Schema.Types.ObjectId, ref: "User" },
-  product: { type: Schema.Types.ObjectId, ref: "Product" },
-  productSlug: { type: String, required: true },
-  productName: { type: String, required: true },
+  items: { type: [OrderItemSchema], required: true },
   amount: { type: Number, required: true },
   sender: {
     name: { type: String, required: true },

@@ -7,7 +7,7 @@ import { CategoryDTO } from "@/lib/types";
 // (it looked like a static GET with no per-request input) and keeps serving
 // that same snapshot forever — which is exactly why the header showed
 // "No categories yet." even after categories existed in Mongo.
-export const dynamic = "force-dynamic";
+export const revalidate = 45;
 
 export async function GET() {
   await connectDB();

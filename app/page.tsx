@@ -4,10 +4,12 @@ import CategoryRow from "@/components/CategoryRow";
 import Marquee from "@/components/Marquee";
 import { getCategories, getActiveProducts } from "@/lib/catalog";
 
-// This page reads Mongo directly (not via fetch), so Next.js would otherwise
-// statically generate it once at build time and freeze it there — any product
-// added through admin afterward wouldn't show up until the next deploy.
-export const dynamic = "force-dynamic";
+// This page reads Mongo directly (not via fetch). It's cached and
+// regenerated at most once every 45 seconds — this is what makes the site
+// fast (most visits are served from cache instead of hitting the database),
+// at the cost of a new admin-added product taking up to 45s to appear
+// instead of being instant.
+export const revalidate = 45;
 
 export default async function Home() {
   const [categories, products] = await Promise.all([getCategories(), getActiveProducts()]);

@@ -6,7 +6,7 @@ import { connectDB } from "@/lib/mongodb";
 import CategoryModel from "@/models/Category";
 import { getActiveProducts } from "@/lib/catalog";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 45;
 
 export default async function CategoryPage({ params }: { params: { slug: string } }) {
   await connectDB();

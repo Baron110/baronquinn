@@ -2,31 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 
-declare global {
-  interface Window {
-    google?: any;
-    initGooglePlaces?: () => void;
-  }
-}
-
-let scriptLoadingPromise: Promise<void> | null = null;
-
-function loadGoogleMapsScript(apiKey: string): Promise<void> {
-  if (window.google?.maps?.places) return Promise.resolve();
-  if (scriptLoadingPromise) return scriptLoadingPromise;
-
-  scriptLoadingPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGooglePlaces`;
-    script.async = true;
-    window.initGooglePlaces = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Google Maps script"));
-    document.head.appendChild(script);
-  });
-
-  return scriptLoadingPromise;
-}
-
 export type AddressParts = {
   street: string;
   city: string;
@@ -35,6 +10,41 @@ export type AddressParts = {
   zip: string;
 };
 
+type PhotonFeature = {
+  properties: {
+    name?: string;
+    housenumber?: string;
+    street?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+    county?: string;
+    state?: string;
+    country?: string;
+    postcode?: string;
+  };
+};
+
+function toAddressParts(f: PhotonFeature): AddressParts {
+  const p = f.properties;
+  const street = [p.housenumber, p.street].filter(Boolean).join(" ") || p.name || "";
+  const city = p.city || p.town || p.village || p.county || "";
+  return {
+    street,
+    city,
+    state: p.state || "",
+    country: p.country || "",
+    zip: p.postcode || ""
+  };
+}
+
+function label(f: PhotonFeature) {
+  const p = f.properties;
+  const line1 = [p.housenumber, p.street].filter(Boolean).join(" ") || p.name || "";
+  const rest = [p.city || p.town || p.village, p.state, p.country].filter(Boolean).join(", ");
+  return rest ? `${line1}, ${rest}` : line1;
+}
+
 export default function AddressAutocomplete({
   className,
   onSelect
@@ -42,66 +52,84 @@ export default function AddressAutocomplete({
   className?: string;
   onSelect: (address: AddressParts) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [ready, setReady] = useState(false);
-  const [unavailable, setUnavailable] = useState(false);
+  const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<PhotonFeature[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
-      setUnavailable(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (query.trim().length < 3) {
+      setSuggestions([]);
+      setOpen(false);
       return;
     }
 
-    loadGoogleMapsScript(apiKey)
-      .then(() => setReady(true))
-      .catch(() => setUnavailable(true));
-  }, []);
+    debounceRef.current = setTimeout(async () => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-  useEffect(() => {
-    if (!ready || !inputRef.current || !window.google) return;
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`,
+          { signal: controller.signal }
+        );
+        const data = await res.json();
+        setSuggestions(data.features ?? []);
+        setOpen(true);
+      } catch {
+        // aborted or network hiccup — leave the last suggestions as-is
+      } finally {
+        setLoading(false);
+      }
+    }, 350);
 
-    const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-      fields: ["address_components", "formatted_address"]
-    });
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query]);
 
-    const listener = autocomplete.addListener("place_changed", () => {
-      const place = autocomplete.getPlace();
-      const components = place.address_components ?? [];
-
-      const get = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name ?? "";
-      const getShort = (type: string) => components.find((c: any) => c.types.includes(type))?.short_name ?? "";
-
-      const streetNumber = get("street_number");
-      const route = get("route");
-
-      onSelect({
-        street: [streetNumber, route].filter(Boolean).join(" ") || place.formatted_address || "",
-        city: get("locality") || get("postal_town") || get("sublocality") || "",
-        state: get("administrative_area_level_1"),
-        country: getShort("country"),
-        zip: get("postal_code")
-      });
-    });
-
-    return () => listener.remove();
-  }, [ready, onSelect]);
+  function handleSelect(f: PhotonFeature) {
+    setQuery(label(f));
+    setOpen(false);
+    onSelect(toAddressParts(f));
+  }
 
   return (
-    <div>
+    <div className="relative">
       <input
-        ref={inputRef}
         type="text"
         name="street"
-        placeholder={unavailable ? "Street address" : "Start typing your address..."}
+        placeholder="Start typing your address..."
         className={className}
         autoComplete="off"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onFocus={() => suggestions.length > 0 && setOpen(true)}
       />
-      {unavailable && (
-        <p className="text-xs text-ink/40 mt-1">
-          Live address suggestions aren&apos;t configured yet — type the full address manually.
-        </p>
+
+      {open && suggestions.length > 0 && (
+        <ul className="absolute z-10 left-0 right-0 mt-1 bg-paper border border-line max-h-64 overflow-y-auto text-sm">
+          {suggestions.map((f, i) => (
+            <li key={i}>
+              <button
+                type="button"
+                onMouseDown={() => handleSelect(f)}
+                className="w-full text-left px-3 py-2 hover:bg-bone transition-colors"
+              >
+                {label(f)}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
+
+      {loading && <p className="text-xs text-ink/40 mt-1">Searching...</p>}
     </div>
   );
 }

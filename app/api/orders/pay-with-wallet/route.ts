@@ -13,23 +13,42 @@ export async function POST(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "You must be logged in" }, { status: 401 });
 
   const body = await req.json();
-  const { productSlug, sender, recipient, loveNote, address } = body;
+  const { items: cartItems, sender, recipient, loveNote, address } = body;
 
-  if (!productSlug || !sender?.email || !sender?.name || !sender?.phone || !recipient?.name || !address?.street) {
+  if (!Array.isArray(cartItems) || cartItems.length === 0) {
+    return NextResponse.json({ error: "Your cart is empty" }, { status: 400 });
+  }
+  if (!sender?.email || !sender?.name || !sender?.phone || !recipient?.name || !address?.street) {
     return NextResponse.json({ error: "Missing required order fields" }, { status: 400 });
   }
 
   await connectDB();
 
-  const product = await Product.findOne({ slug: productSlug, active: true });
-  if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  const orderItems = [];
+  let amount = 0;
+
+  for (const ci of cartItems) {
+    const product = await Product.findOne({ slug: ci.slug, active: true });
+    if (!product) {
+      return NextResponse.json({ error: `Product no longer available: ${ci.slug}` }, { status: 404 });
+    }
+    const quantity = Math.max(1, Number(ci.quantity) || 1);
+    orderItems.push({
+      product: product._id,
+      productSlug: product.slug,
+      productName: product.name,
+      price: product.price,
+      quantity
+    });
+    amount += product.price * quantity;
+  }
 
   // Atomic: only deducts if the balance is still sufficient at the moment of
   // the write. Prevents a double-click or a race between two tabs from
   // spending more than the wallet actually holds.
   const updatedUser = await User.findOneAndUpdate(
-    { _id: session.user.id, walletBalance: { $gte: product.price } },
-    { $inc: { walletBalance: -product.price } },
+    { _id: session.user.id, walletBalance: { $gte: amount } },
+    { $inc: { walletBalance: -amount } },
     { new: true }
   );
 
@@ -39,15 +58,13 @@ export async function POST(req: NextRequest) {
 
   const order = await Order.create({
     user: session.user.id,
-    product: product._id,
-    productSlug: product.slug,
-    productName: product.name,
-    amount: product.price,
+    items: orderItems,
+    amount,
     sender,
     recipient,
     loveNote,
     address,
-    reference: `wallet-pay-${product.slug}-${Date.now()}`,
+    reference: `wallet-pay-${Date.now()}`,
     status: "paid"
   });
 
@@ -55,15 +72,18 @@ export async function POST(req: NextRequest) {
     user: session.user.id,
     type: "debit",
     status: "completed",
-    amount: product.price,
+    amount,
     reference: order.reference,
     relatedOrder: order._id,
-    description: `Payment for ${product.name}`
+    description:
+      orderItems.length === 1
+        ? `Payment for ${orderItems[0].productName}`
+        : `Payment for ${orderItems.length} items`
   });
 
   try {
     await sendOrderConfirmationEmail(sender.email, {
-      productName: order.productName,
+      items: orderItems,
       amount: order.amount,
       reference: order.reference,
       recipient: order.recipient
