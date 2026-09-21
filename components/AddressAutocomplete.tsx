@@ -21,6 +21,7 @@ type PhotonFeature = {
     county?: string;
     state?: string;
     country?: string;
+    countrycode?: string;
     postcode?: string;
   };
 };
@@ -47,10 +48,19 @@ function label(f: PhotonFeature) {
 
 export default function AddressAutocomplete({
   className,
-  onSelect
+  onSelect,
+  countryCode,
+  countryName,
+  countryLat,
+  countryLon
 }: {
   className?: string;
   onSelect: (address: AddressParts) => void;
+  /** ISO2 code of the country already chosen in the form — results are restricted to it. */
+  countryCode?: string;
+  countryName?: string;
+  countryLat?: number;
+  countryLon?: number;
 }) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<PhotonFeature[]>([]);
@@ -59,10 +69,18 @@ export default function AddressAutocomplete({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // A different country was picked — the previous search text/suggestions
+  // no longer make sense, so drop them rather than leave stale results sitting.
+  useEffect(() => {
+    setQuery("");
+    setSuggestions([]);
+    setOpen(false);
+  }, [countryCode]);
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
-    if (query.trim().length < 3) {
+    if (query.trim().length < 3 || !countryCode) {
       setSuggestions([]);
       setOpen(false);
       return;
@@ -75,12 +93,27 @@ export default function AddressAutocomplete({
 
       setLoading(true);
       try {
+        // Bias toward the chosen country's center, and pull more raw results
+        // than we'll show so there's a decent pool left after filtering
+        // down to that country — Photon's global ranking otherwise happily
+        // returns results from anywhere that textually matches.
+        const biasParams =
+          countryLat != null && countryLon != null ? `&lat=${countryLat}&lon=${countryLon}&zoom=6` : "";
         const res = await fetch(
-          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`,
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=20${biasParams}`,
           { signal: controller.signal }
         );
         const data = await res.json();
-        setSuggestions(data.features ?? []);
+        const features: PhotonFeature[] = data.features ?? [];
+
+        const inCountry = features.filter((f) => {
+          const cc = f.properties.countrycode?.toUpperCase();
+          if (cc) return cc === countryCode.toUpperCase();
+          // some results omit countrycode — fall back to matching the name
+          return countryName ? f.properties.country?.toLowerCase() === countryName.toLowerCase() : false;
+        });
+
+        setSuggestions(inCountry.slice(0, 5));
         setOpen(true);
       } catch {
         // aborted or network hiccup — leave the last suggestions as-is
@@ -92,7 +125,7 @@ export default function AddressAutocomplete({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query]);
+  }, [query, countryCode, countryName, countryLat, countryLon]);
 
   function handleSelect(f: PhotonFeature) {
     setQuery(label(f));
@@ -105,9 +138,10 @@ export default function AddressAutocomplete({
       <input
         type="text"
         name="street"
-        placeholder="Start typing your address..."
-        className={className}
+        placeholder={countryCode ? "Start typing your address..." : "Select a country above first"}
+        className={`${className ?? ""} disabled:opacity-50 disabled:cursor-not-allowed`}
         autoComplete="off"
+        disabled={!countryCode}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => suggestions.length > 0 && setOpen(true)}
@@ -130,6 +164,9 @@ export default function AddressAutocomplete({
       )}
 
       {loading && <p className="text-xs text-ink/40 mt-1">Searching...</p>}
+      {!loading && countryCode && query.trim().length >= 3 && suggestions.length === 0 && (
+        <p className="text-xs text-ink/40 mt-1">No matches in {countryName || "that country"} — type it in manually below.</p>
+      )}
     </div>
   );
 }

@@ -86,7 +86,8 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent">("idle");
 
-  const country = allCountries.find((c) => c.isoCode === countryCode)?.name ?? "";
+  const selectedCountry = allCountries.find((c) => c.isoCode === countryCode);
+  const country = selectedCountry?.name ?? "";
   const statesForCountry = countryCode ? State.getStatesOfCountry(countryCode) : [];
 
   const zipLookupRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -373,7 +374,14 @@ export default function CheckoutPage() {
                 </div>
 
                 <Field label="Street address">
-                  <AddressAutocomplete className={inputClass} onSelect={handleAddressSelect} />
+                  <AddressAutocomplete
+                    className={inputClass}
+                    onSelect={handleAddressSelect}
+                    countryCode={countryCode || undefined}
+                    countryName={country || undefined}
+                    countryLat={selectedCountry ? parseFloat(selectedCountry.latitude) : undefined}
+                    countryLon={selectedCountry ? parseFloat(selectedCountry.longitude) : undefined}
+                  />
                   <input
                     className={`${inputClass} mt-2`}
                     placeholder="Street address (auto-filled above, editable)"
