@@ -37,47 +37,48 @@ export default function CartPage() {
 
         <div className="border border-line divide-y divide-line">
           {items.map((item) => (
-            <div key={item.slug} className="p-4 flex items-center gap-4">
-              <div className="w-16 h-16 bg-bone shrink-0 overflow-hidden">
-                {item.image && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.image} alt="" className="w-full h-full object-cover" />
-                )}
+            <div key={item.slug} className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="w-16 h-16 bg-bone shrink-0 overflow-hidden">
+                  {item.image && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.image} alt="" className="w-full h-full object-cover" />
+                  )}
+                </div>
+
+                <div className="min-w-0">
+                  <Link href={`/product/${item.slug}`} className="text-sm hover:underline">
+                    {item.name}
+                  </Link>
+                  <p className="text-xs text-ink/40 mt-0.5">{formatNaira(item.price)} each</p>
+                </div>
               </div>
 
-              <div className="flex-1 min-w-0">
-                <Link href={`/product/${item.slug}`} className="text-sm hover:underline">
-                  {item.name}
-                </Link>
-                <p className="text-xs text-ink/40 mt-0.5">{formatNaira(item.price)} each</p>
-              </div>
+              <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 sm:flex-1">
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => updateQuantity(item.slug, item.quantity - 1)}
+                    aria-label="Decrease quantity"
+                    className="w-7 h-7 border border-line hover:border-ink"
+                  >
+                    −
+                  </button>
+                  <span className="w-6 text-center text-sm">{item.quantity}</span>
+                  <button
+                    onClick={() => updateQuantity(item.slug, item.quantity + 1)}
+                    aria-label="Increase quantity"
+                    className="w-7 h-7 border border-line hover:border-ink"
+                  >
+                    +
+                  </button>
+                </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => updateQuantity(item.slug, item.quantity - 1)}
-                  aria-label="Decrease quantity"
-                  className="w-7 h-7 border border-line hover:border-ink"
-                >
-                  −
+                <p className="text-sm w-20 text-right shrink-0">{formatNaira(item.price * item.quantity)}</p>
+
+                <button onClick={() => removeItem(item.slug)} className="text-xs text-red-700 shrink-0">
+                  Remove
                 </button>
-                <span className="w-6 text-center text-sm">{item.quantity}</span>
-                <button
-                  onClick={() => updateQuantity(item.slug, item.quantity + 1)}
-                  aria-label="Increase quantity"
-                  className="w-7 h-7 border border-line hover:border-ink"
-                >
-                  +
-                </button>
               </div>
-
-              <p className="text-sm w-24 text-right shrink-0">{formatNaira(item.price * item.quantity)}</p>
-
-              <button
-                onClick={() => removeItem(item.slug)}
-                className="text-xs text-red-700 shrink-0"
-              >
-                Remove
-              </button>
             </div>
           ))}
         </div>

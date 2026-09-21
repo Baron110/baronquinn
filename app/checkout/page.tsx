@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Country, State } from "country-state-city";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AddressAutocomplete, { AddressParts } from "@/components/AddressAutocomplete";
@@ -29,6 +30,20 @@ function redirectToPaygate(payRequestId: string, checksum: string) {
   form.appendChild(checksumField);
   document.body.appendChild(form);
   form.submit();
+}
+
+const allCountries = Country.getAllCountries();
+
+function findCountryByName(name: string) {
+  const n = name.trim().toLowerCase();
+  return allCountries.find((c) => c.name.toLowerCase() === n || c.isoCode.toLowerCase() === n);
+}
+
+function findStateByName(countryIso: string, name: string) {
+  const n = name.trim().toLowerCase();
+  return State.getStatesOfCountry(countryIso).find(
+    (s) => s.name.toLowerCase() === n || s.isoCode.toLowerCase() === n
+  );
 }
 
 const inputClass =
@@ -63,12 +78,19 @@ export default function CheckoutPage() {
   const [street, setStreet] = useState("");
   const [apartment, setApartment] = useState("");
   const [city, setCity] = useState("");
-  const [addrState, setAddrState] = useState("");
-  const [country, setCountry] = useState("");
+  const [zip, setZip] = useState("");
+  const [countryCode, setCountryCode] = useState(""); // drives the State dropdown
+  const [addrState, setAddrState] = useState(""); // the actual name sent to the backend
 
   const [paying, setPaying] = useState<"paygate" | "wallet" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent">("idle");
+
+  const country = allCountries.find((c) => c.isoCode === countryCode)?.name ?? "";
+  const statesForCountry = countryCode ? State.getStatesOfCountry(countryCode) : [];
+
+  const zipLookupRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastZipLookupKey = useRef<string>("");
 
   useEffect(() => {
     if (session?.user?.email) setEmail(session.user.email);
@@ -87,9 +109,65 @@ export default function CheckoutPage() {
   const handleAddressSelect = useCallback((address: AddressParts) => {
     setStreet(address.street);
     setCity(address.city);
-    setAddrState(address.state);
-    setCountry(address.country);
+    if (address.zip) setZip(address.zip);
+
+    const matchedCountry = address.country ? findCountryByName(address.country) : undefined;
+    if (matchedCountry) {
+      setCountryCode(matchedCountry.isoCode);
+      const matchedState = address.state ? findStateByName(matchedCountry.isoCode, address.state) : undefined;
+      setAddrState(matchedState ? matchedState.name : address.state);
+    } else {
+      // Couldn't match a dropdown option — leave country/state for the
+      // person to pick manually, street/city are still filled in.
+      setAddrState(address.state);
+    }
   }, []);
+
+  // When both a zip and a country are present, ask a free public lookup
+  // (Zippopotam — no key, no billing) for the city/state that zip belongs
+  // to. Coverage varies by country; when there's no match it just fails
+  // quietly and the person fills city/state in themselves.
+  useEffect(() => {
+    if (zipLookupRef.current) clearTimeout(zipLookupRef.current);
+    if (!zip.trim() || !countryCode) return;
+
+    const key = `${countryCode}:${zip.trim()}`;
+    if (key === lastZipLookupKey.current) return;
+
+    zipLookupRef.current = setTimeout(async () => {
+      lastZipLookupKey.current = key;
+      try {
+        const res = await fetch(`https://api.zippopotam.us/${countryCode}/${encodeURIComponent(zip.trim())}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const place = data.places?.[0];
+        if (!place) return;
+
+        if (place["place name"]) setCity(place["place name"]);
+        const stateName = place["state"];
+        if (stateName) {
+          const matched = findStateByName(countryCode, stateName);
+          setAddrState(matched ? matched.name : stateName);
+        }
+      } catch {
+        // no coverage for this country/zip combo — leave fields as they are
+      }
+    }, 500);
+
+    return () => {
+      if (zipLookupRef.current) clearTimeout(zipLookupRef.current);
+    };
+  }, [zip, countryCode]);
+
+  function handleCountryChange(iso: string) {
+    setCountryCode(iso);
+    setAddrState(""); // states belong to a country — previous choice no longer valid
+  }
+
+  function handleStateChange(iso: string) {
+    const matched = statesForCountry.find((s) => s.isoCode === iso);
+    setAddrState(matched?.name ?? "");
+  }
 
   async function handleResendVerification() {
     setResendStatus("sending");
@@ -115,7 +193,14 @@ export default function CheckoutPage() {
       sender: { name: senderName, phone: senderPhone, email },
       recipient: { name: recipientName, phone: recipientPhone || undefined },
       loveNote: loveNote || undefined,
-      address: { street, apartment: apartment || undefined, city, state: addrState, country }
+      address: {
+        street,
+        apartment: apartment || undefined,
+        city,
+        state: addrState,
+        country,
+        zip: zip || undefined
+      }
     };
   }
 
@@ -249,6 +334,44 @@ export default function CheckoutPage() {
             <section>
               <h2 className="text-sm uppercase tracking-wide text-ink/50 mb-4">Delivery address</h2>
               <div className="grid gap-4">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <Field label="Country">
+                    <select
+                      className={inputClass}
+                      value={countryCode}
+                      onChange={(e) => handleCountryChange(e.target.value)}
+                    >
+                      <option value="">Select a country</option>
+                      {allCountries.map((c) => (
+                        <option key={c.isoCode} value={c.isoCode}>
+                          {c.flag} {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="State / province">
+                    <select
+                      className={inputClass}
+                      value={statesForCountry.find((s) => s.name === addrState)?.isoCode ?? ""}
+                      onChange={(e) => handleStateChange(e.target.value)}
+                      disabled={!countryCode || statesForCountry.length === 0}
+                    >
+                      <option value="">
+                        {!countryCode
+                          ? "Select a country first"
+                          : statesForCountry.length === 0
+                          ? "No states listed"
+                          : "Select a state"}
+                      </option>
+                      {statesForCountry.map((s) => (
+                        <option key={s.isoCode} value={s.isoCode}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
                 <Field label="Street address">
                   <AddressAutocomplete className={inputClass} onSelect={handleAddressSelect} />
                   <input
@@ -261,19 +384,16 @@ export default function CheckoutPage() {
                 <Field label="Apartment / suite" optional>
                   <input className={inputClass} value={apartment} onChange={(e) => setApartment(e.target.value)} />
                 </Field>
-                <div className="grid sm:grid-cols-3 gap-4">
+                <div className="grid sm:grid-cols-2 gap-4">
                   <Field label="City">
                     <input className={inputClass} value={city} onChange={(e) => setCity(e.target.value)} />
                   </Field>
-                  <Field label="State">
-                    <input className={inputClass} value={addrState} onChange={(e) => setAddrState(e.target.value)} />
-                  </Field>
-                  <Field label="Country">
+                  <Field label="Zip / postal code" optional>
                     <input
                       className={inputClass}
-                      placeholder="e.g. NG, US"
-                      value={country}
-                      onChange={(e) => setCountry(e.target.value)}
+                      placeholder="Fills in city/state where available"
+                      value={zip}
+                      onChange={(e) => setZip(e.target.value)}
                     />
                   </Field>
                 </div>
