@@ -2,7 +2,11 @@ import { getResend, FROM_EMAIL } from "./resend";
 import { formatNaira } from "./format";
 
 function siteUrl() {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  // Trimmed and stripped of any trailing slash — so a stray space or
+  // trailing slash pasted into the env var on Vercel can't silently
+  // break every link this file builds, the way it just did.
+  const raw = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  return raw.trim().replace(/\/+$/, "");
 }
 
 function wrapper(bodyHtml: string) {
