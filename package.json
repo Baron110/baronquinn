@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "create-admin": "node scripts/create-admin.js",
+    "verify-user": "node scripts/verify-user.js",
     "seed": "node scripts/seed.js",
     "import-photos": "node scripts/import-photos.js",
     "import-batch2": "node scripts/import-products-batch2.js",
