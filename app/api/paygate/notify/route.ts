@@ -1,80 +1,108 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyNotifyChecksum } from "@/lib/paygate";
+import { verifyWebhookSignature } from "@/lib/paygate";
 import { connectDB } from "@/lib/mongodb";
 import Order from "@/models/Order";
 import User from "@/models/User";
 import WalletTransaction from "@/models/WalletTransaction";
 import { sendOrderConfirmationEmail } from "@/lib/emails";
 
-// PayGate calls this server-to-server once the customer finishes on PayWeb.
-// This is the source of truth for whether a payment succeeded — the browser
-// redirect to /checkout/return can be closed or lost, this can't.
+// PayGate calls this server-to-server once a transfer into one of our
+// virtual accounts is detected. This is the source of truth for whether a
+// payment succeeded — the browser can be closed or lose connection while
+// waiting, this can't.
 export async function POST(req: NextRequest) {
-  const formData = await req.formData();
-  const fields = Object.fromEntries(formData.entries()) as Record<string, string>;
+  // Read as raw text first — the signature is computed over the exact raw
+  // bytes PayGate sent. Parsing straight to JSON and re-serializing could
+  // change whitespace/key order and make a genuinely valid webhook fail.
+  const rawBody = await req.text();
 
-  if (!verifyNotifyChecksum(fields)) {
-    console.warn("PayGate notify: checksum mismatch", fields);
-    return NextResponse.json({ error: "invalid checksum" }, { status: 400 });
+  if (!verifyWebhookSignature(rawBody, req.headers.get("x-paygate-signature"))) {
+    console.warn("PayGate webhook: signature mismatch");
+    return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 
-  // TRANSACTION_STATUS: 1 = approved. See PayGate's Transaction Status Codes reference.
-  const approved = fields.TRANSACTION_STATUS === "1";
-  const reference = fields.REFERENCE;
+  const event = JSON.parse(rawBody);
+
+  if (event.event !== "payment.received") {
+    // Ignore anything else gracefully rather than erroring — PayGate may
+    // add event types later.
+    return NextResponse.json({ received: true });
+  }
+
+  const data = event.data;
+  const reference: string | undefined = data?.customer?.reference;
+  const grossAmount: number = Number(data?.gross_amount ?? data?.amount ?? 0);
+
+  if (!reference) {
+    console.warn("PayGate webhook: no customer.reference on payload", data);
+    return NextResponse.json({ received: true, warning: "no reference" });
+  }
 
   await connectDB();
 
-  if (reference?.startsWith("wallet-")) {
-    return handleWalletDeposit(reference, approved);
+  if (reference.startsWith("wallet-")) {
+    return handleWalletDeposit(reference, grossAmount);
   }
-  return handleOrderPayment(reference, approved);
+  return handleOrderPayment(reference, grossAmount);
 }
 
-async function handleWalletDeposit(reference: string, approved: boolean) {
+async function handleWalletDeposit(reference: string, grossAmount: number) {
   const tx = await WalletTransaction.findOne({ reference });
 
   if (!tx) {
-    console.warn("PayGate notify: no wallet transaction found for reference", reference);
+    console.warn("PayGate webhook: no wallet transaction found for reference", reference);
     return NextResponse.json({ received: true, warning: "transaction not found" });
   }
 
-  // Already processed (PayGate can retry notifications) — don't double-credit.
+  // Already processed (PayGate can retry deliveries) — don't double-credit.
   if (tx.status !== "pending") {
     return NextResponse.json({ received: true, note: "already processed" });
   }
 
-  tx.status = approved ? "completed" : "failed";
-  await tx.save();
-
-  if (approved) {
-    await User.findByIdAndUpdate(tx.user, { $inc: { walletBalance: tx.amount } });
+  // Allow a small epsilon for floating-point amounts; anything meaningfully
+  // short of what was asked for is left pending rather than credited.
+  if (grossAmount + 1 < tx.amount) {
+    console.warn(`PayGate webhook: underpaid wallet deposit ${reference} — got ${grossAmount}, needed ${tx.amount}`);
+    return NextResponse.json({ received: true, note: "underpaid, left pending" });
   }
+
+  tx.status = "completed";
+  await tx.save();
+  await User.findByIdAndUpdate(tx.user, { $inc: { walletBalance: tx.amount } });
 
   return NextResponse.json({ received: true });
 }
 
-async function handleOrderPayment(reference: string, approved: boolean) {
+async function handleOrderPayment(reference: string, grossAmount: number) {
   const order = await Order.findOne({ reference });
 
   if (!order) {
-    console.warn("PayGate notify: no order found for reference", reference);
+    console.warn("PayGate webhook: no order found for reference", reference);
     return NextResponse.json({ received: true, warning: "order not found" });
   }
 
-  order.status = approved ? "paid" : "failed";
+  // Already processed — avoid sending a second confirmation email on retry.
+  if (order.status === "paid") {
+    return NextResponse.json({ received: true, note: "already processed" });
+  }
+
+  if (grossAmount + 1 < order.amount) {
+    console.warn(`PayGate webhook: underpaid order ${reference} — got ${grossAmount}, needed ${order.amount}`);
+    return NextResponse.json({ received: true, note: "underpaid, left pending" });
+  }
+
+  order.status = "paid";
   await order.save();
 
-  if (approved) {
-    try {
-      await sendOrderConfirmationEmail(order.sender.email, {
-        items: order.items,
-        amount: order.amount,
-        reference: order.reference,
-        recipient: order.recipient
-      });
-    } catch (err) {
-      console.error("Failed to send order confirmation email:", err);
-    }
+  try {
+    await sendOrderConfirmationEmail(order.sender.email, {
+      items: order.items,
+      amount: order.amount,
+      reference: order.reference,
+      recipient: order.recipient
+    });
+  } catch (err) {
+    console.error("Failed to send order confirmation email:", err);
   }
 
   return NextResponse.json({ received: true });

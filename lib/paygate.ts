@@ -1,78 +1,108 @@
 import crypto from "crypto";
 
-const PAYGATE_ID = process.env.PAYGATE_ID ?? "";
-const ENCRYPTION_KEY = process.env.PAYGATE_ENCRYPTION_KEY ?? "";
-const INITIATE_URL = "https://secure.paygate.co.za/payweb3/initiate.trans";
+const API_KEY = process.env.PAYGATE_API_KEY ?? ""; // ak_live_xxx / ak_test_xxx
+const SECRET = process.env.PAYGATE_SECRET ?? ""; // sk_live_xxx / sk_test_xxx — signs outgoing requests
+const WEBHOOK_SECRET = process.env.PAYGATE_WEBHOOK_SECRET ?? ""; // separate secret — verifies incoming webhooks
+const BASE_URL = "https://api.paygate.ng/api";
 
-// PayGate's checksum is MD5(concatenated field values in request order + encryption key).
-// Field order matters — must match the order fields were added to the payload.
-function checksum(values: (string | number)[]) {
-  return crypto.createHash("md5").update(values.join("") + ENCRYPTION_KEY).digest("hex");
+// "palmpay" or "nomba" per PayGate's docs — whichever your account is provisioned for.
+const VA_PROVIDER = process.env.PAYGATE_VA_PROVIDER || "palmpay";
+
+function signRequest(timestamp: string, bodyStr: string) {
+  return crypto.createHmac("sha256", SECRET).update(`${timestamp}.${bodyStr}`).digest("hex");
 }
 
-export type InitiateParams = {
-  reference: string;
-  amountKobo: number; // amount in the smallest currency unit, e.g. kobo for NGN, cents for ZAR
-  currency: string; // confirm with PayGate which currencies your merchant account settles in
-  email: string;
-  returnUrl: string;
-  notifyUrl: string;
-};
-
-export async function initiatePaygateTransaction(params: InitiateParams) {
-  if (!PAYGATE_ID || !ENCRYPTION_KEY) {
-    throw new Error("PAYGATE_ID and PAYGATE_ENCRYPTION_KEY must be set");
+async function paygateRequest<T = any>(
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>
+): Promise<T> {
+  if (!API_KEY || !SECRET) {
+    throw new Error("PAYGATE_API_KEY and PAYGATE_SECRET must be set");
   }
 
-  const transactionDate = new Date().toISOString().replace("T", " ").substring(0, 19);
+  const bodyStr = body ? JSON.stringify(body) : "";
+  const timestamp = String(Math.floor(Date.now() / 1000));
 
-  const fields: Record<string, string | number> = {
-    PAYGATE_ID,
-    REFERENCE: params.reference,
-    AMOUNT: params.amountKobo,
-    CURRENCY: params.currency,
-    RETURN_URL: params.returnUrl,
-    TRANSACTION_DATE: transactionDate,
-    LOCALE: "en-us",
-    COUNTRY: "NGA",
-    EMAIL: params.email,
-    NOTIFY_URL: params.notifyUrl,
-    // Restricted to bank transfer, same as the PartyWithZell checkout —
-    // card was removed there after Paystack verification issues, so this
-    // keeps the two sites' payment flow consistent. Remove this field
-    // to allow PayGate's full method list (card, EFT, etc).
-    PAY_METHOD: "BT"
-  };
-
-  const CHECKSUM = checksum(Object.values(fields));
-  const body = new URLSearchParams({ ...fields, CHECKSUM } as Record<string, string>);
-
-  const res = await fetch(INITIATE_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${API_KEY}`,
+      "X-Timestamp": timestamp,
+      "X-Signature": signRequest(timestamp, bodyStr),
+      "Content-Type": "application/json",
+      ...extraHeaders
+    },
+    // Sending the exact same string we signed — not the object — so the
+    // bytes PayGate hashes on their end match what we hashed on ours.
+    body: bodyStr || undefined
   });
 
-  const text = await res.text();
-  const parsed = Object.fromEntries(new URLSearchParams(text));
-
-  if (!parsed.PAY_REQUEST_ID) {
-    throw new Error(`PayGate initiate failed: ${text}`);
+  const json = await res.json();
+  if (!res.ok || json.status === "error") {
+    throw new Error(json.message || `PayGate request failed (${res.status})`);
   }
+  return json;
+}
 
-  // Redirect-step checksum is MD5(PAYGATE_ID + PAY_REQUEST_ID + REFERENCE + key) per PayGate docs.
-  const redirectChecksum = checksum([PAYGATE_ID, parsed.PAY_REQUEST_ID, params.reference]);
+export type VirtualAccount = {
+  uuid: string;
+  accountNumber: string;
+  accountName: string;
+  bankName: string;
+};
 
+// One virtual account per payment attempt. `reference` (an order or wallet
+// reference, already unique) doubles as both the idempotency key and the
+// customer's external_reference, so retrying this call for the same
+// reference safely returns the same account instead of risking PayGate's
+// per-customer account reuse handing back a DIFFERENT order's account.
+export async function createVirtualAccount(params: {
+  reference: string;
+  name: string;
+  email: string;
+  phone: string;
+}): Promise<VirtualAccount> {
+  const json = await paygateRequest<{
+    data: { virtual_account: { uuid: string; account_number: string; account_name: string; bank_name: string } };
+  }>(
+    "POST",
+    "/virtual-accounts",
+    {
+      provider: VA_PROVIDER,
+      is_permanent: false,
+      customer: {
+        name: params.name,
+        email: params.email,
+        phone: params.phone,
+        external_reference: params.reference
+      }
+    },
+    { "X-Idempotency-Key": params.reference }
+  );
+
+  const va = json.data.virtual_account;
   return {
-    payRequestId: parsed.PAY_REQUEST_ID,
-    checksum: redirectChecksum
+    uuid: va.uuid,
+    accountNumber: va.account_number,
+    accountName: va.account_name,
+    bankName: va.bank_name
   };
 }
 
-// Verifies a Notify URL callback. PayGate signs the notify body with the same
-// MD5(values + key) scheme, using all fields except CHECKSUM itself, in order.
-export function verifyNotifyChecksum(fields: Record<string, string>) {
-  const { CHECKSUM, ...rest } = fields;
-  const expected = checksum(Object.values(rest));
-  return expected === CHECKSUM;
+// Webhook signature is HMAC-SHA256 of the RAW request body (not the parsed
+// object — whitespace/key-order changes would break the hash), using the
+// separate webhook secret, sent as "sha256=<hex>".
+export function verifyWebhookSignature(rawBody: string, signatureHeader: string | null): boolean {
+  if (!WEBHOOK_SECRET || !signatureHeader) return false;
+
+  const received = signatureHeader.startsWith("sha256=") ? signatureHeader.slice(7) : signatureHeader;
+  const expected = crypto.createHmac("sha256", WEBHOOK_SECRET).update(rawBody).digest("hex");
+
+  const receivedBuf = Buffer.from(received, "hex");
+  const expectedBuf = Buffer.from(expected, "hex");
+  if (receivedBuf.length !== expectedBuf.length) return false;
+
+  return crypto.timingSafeEqual(receivedBuf, expectedBuf);
 }

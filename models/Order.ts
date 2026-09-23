@@ -27,6 +27,12 @@ export interface IOrder {
   };
   reference: string; // sent to PayGate as REFERENCE, matched back on the notify webhook
   status: OrderStatus;
+  payment?: {
+    accountNumber: string;
+    accountName: string;
+    bankName: string;
+    virtualAccountUuid: string;
+  };
   createdAt: Date;
 }
 
@@ -65,6 +71,12 @@ const OrderSchema = new Schema<IOrder>({
   },
   reference: { type: String, required: true, unique: true },
   status: { type: String, enum: ["pending", "paid", "failed", "cancelled"], default: "pending" },
+  payment: {
+    accountNumber: { type: String },
+    accountName: { type: String },
+    bankName: { type: String },
+    virtualAccountUuid: { type: String }
+  },
   createdAt: { type: Date, default: Date.now }
 });
 

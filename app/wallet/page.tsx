@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -27,27 +28,6 @@ type WalletData = {
 const MIN_DEPOSIT = 100;
 const MAX_DEPOSIT = 1000000;
 
-function redirectToPaygate(payRequestId: string, checksum: string) {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = "https://secure.paygate.co.za/payweb3/process.trans";
-
-  const idField = document.createElement("input");
-  idField.type = "hidden";
-  idField.name = "PAY_REQUEST_ID";
-  idField.value = payRequestId;
-
-  const checksumField = document.createElement("input");
-  checksumField.type = "hidden";
-  checksumField.name = "CHECKSUM";
-  checksumField.value = checksum;
-
-  form.appendChild(idField);
-  form.appendChild(checksumField);
-  document.body.appendChild(form);
-  form.submit();
-}
-
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="border border-line p-5">
@@ -59,8 +39,10 @@ function StatCard({ label, value }: { label: string; value: string }) {
 
 export default function WalletPage() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [amount, setAmount] = useState("");
+  const [phone, setPhone] = useState("");
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,6 +63,10 @@ export default function WalletPage() {
       setError(`Amount must be between ${formatNaira(MIN_DEPOSIT)} and ${formatNaira(MAX_DEPOSIT)}`);
       return;
     }
+    if (!phone.trim()) {
+      setError("Enter a phone number to continue.");
+      return;
+    }
     setError(null);
     setPaying(true);
 
@@ -93,15 +79,20 @@ export default function WalletPage() {
       const deposit = await depositRes.json();
       if (!depositRes.ok) throw new Error(deposit.error ?? "Could not start deposit.");
 
-      const payRes = await fetch("/api/paygate/initiate", {
+      const vaRes = await fetch("/api/paygate/create-virtual-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: numAmount, email: session?.user?.email, reference: deposit.reference })
+        body: JSON.stringify({
+          reference: deposit.reference,
+          name: session?.user?.name ?? "Baronquinn customer",
+          email: session?.user?.email,
+          phone
+        })
       });
-      const pay = await payRes.json();
-      if (!payRes.ok) throw new Error(pay.error ?? "Payment could not be started.");
+      const va = await vaRes.json();
+      if (!vaRes.ok) throw new Error(va.error ?? "Could not start payment.");
 
-      redirectToPaygate(pay.payRequestId, pay.checksum);
+      router.push(`/pay/${deposit.reference}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setPaying(false);
@@ -151,6 +142,17 @@ export default function WalletPage() {
               </p>
             </div>
 
+            <div className="mt-4">
+              <label className="text-xs uppercase tracking-wide text-ink/50">Your phone</label>
+              <input
+                type="tel"
+                className="mt-1.5 w-full h-12 px-4 border border-line text-lg focus:outline-none focus:border-ink"
+                placeholder="080..."
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </div>
+
             {error && <p className="text-xs text-red-700 mt-3">{error}</p>}
 
             <button
@@ -158,9 +160,11 @@ export default function WalletPage() {
               disabled={paying}
               className="mt-5 w-full h-12 bg-ink text-paper text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {paying ? "Redirecting to PayGate..." : "Proceed to secure payment"}
+              {paying ? "Preparing transfer details..." : "Get transfer details"}
             </button>
-            <p className="text-xs text-ink/40 mt-2 text-center">Paid by bank transfer via PayGate.</p>
+            <p className="text-xs text-ink/40 mt-2 text-center">
+              Paid by bank transfer — you'll get a dedicated account number to transfer into.
+            </p>
           </div>
 
           <div className="flex flex-col gap-4">

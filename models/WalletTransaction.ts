@@ -11,6 +11,12 @@ export interface IWalletTransaction {
   reference: string; // deposits: matches the PayGate reference. debits: matches the Order reference.
   relatedOrder?: Types.ObjectId; // ref Order, set on debit entries
   description?: string;
+  payment?: {
+    accountNumber: string;
+    accountName: string;
+    bankName: string;
+    virtualAccountUuid: string;
+  };
   createdAt: Date;
 }
 
@@ -22,6 +28,12 @@ const WalletTransactionSchema = new Schema<IWalletTransaction>({
   reference: { type: String, required: true, unique: true },
   relatedOrder: { type: Schema.Types.ObjectId, ref: "Order" },
   description: { type: String },
+  payment: {
+    accountNumber: { type: String },
+    accountName: { type: String },
+    bankName: { type: String },
+    virtualAccountUuid: { type: String }
+  },
   createdAt: { type: Date, default: Date.now }
 });
 

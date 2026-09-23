@@ -26,15 +26,13 @@ RESEND_FROM_EMAIL=Baronquinn <noreply@baronquinn.com>   # must be on a domain ve
 NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=
 NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=     # create an UNSIGNED preset in Cloudinary → Settings → Upload
 
-# Google Places (address autocomplete at checkout)
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=          # enable "Places API" on this key in Google Cloud Console
+# PayGate (paygate.ng — virtual accounts / bank transfer, NOT paygate.co.za)
+PAYGATE_API_KEY=          # ak_live_xxx — from Settings → API Keys
+PAYGATE_SECRET=           # sk_live_xxx — signs outgoing requests, from Settings → API Keys
+PAYGATE_WEBHOOK_SECRET=   # separate value, from the Webhooks section — verifies incoming webhooks
+PAYGATE_VA_PROVIDER=palmpay   # or "nomba" — whichever your account is provisioned for
 
-# PayGate — NOTE: built against paygate.co.za's PayWeb3 API. If Baronquinn is
-# actually on paygate.ng (a different, unrelated company), this needs to be
-# redone against their docs — do not assume it works as-is.
-PAYGATE_ID=
-PAYGATE_ENCRYPTION_KEY=
-PAYGATE_CURRENCY=NGN
+# Used to build links in emails, and as the base for the PayGate webhook URL
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 

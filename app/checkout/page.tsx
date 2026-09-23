@@ -11,27 +11,6 @@ import AddressAutocomplete, { AddressParts } from "@/components/AddressAutocompl
 import { formatNaira } from "@/lib/format";
 import { useCart } from "@/lib/cart-context";
 
-function redirectToPaygate(payRequestId: string, checksum: string) {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = "https://secure.paygate.co.za/payweb3/process.trans";
-
-  const idField = document.createElement("input");
-  idField.type = "hidden";
-  idField.name = "PAY_REQUEST_ID";
-  idField.value = payRequestId;
-
-  const checksumField = document.createElement("input");
-  checksumField.type = "hidden";
-  checksumField.name = "CHECKSUM";
-  checksumField.value = checksum;
-
-  form.appendChild(idField);
-  form.appendChild(checksumField);
-  document.body.appendChild(form);
-  form.submit();
-}
-
 const allCountries = Country.getAllCountries();
 
 function findCountryByName(name: string) {
@@ -220,18 +199,19 @@ export default function CheckoutPage() {
       const order = await orderRes.json();
       if (!orderRes.ok) throw new Error(order.error ?? "Could not create order.");
 
-      const payRes = await fetch("/api/paygate/initiate", {
+      const vaRes = await fetch("/api/paygate/create-virtual-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: order.amount, email, reference: order.reference })
+        body: JSON.stringify({ reference: order.reference, name: senderName, email, phone: senderPhone })
       });
-      const pay = await payRes.json();
-      if (!payRes.ok) throw new Error(pay.error ?? "Payment could not be started.");
+      const va = await vaRes.json();
+      if (!vaRes.ok) throw new Error(va.error ?? "Could not start payment.");
 
-      // Cleared here (not after return) because the PayGate redirect leaves
-      // this app entirely — there's no later moment to clear it client-side.
+      // Cleared here (not after payment lands) because the order already
+      // exists at this point — there's no later moment to clear it client-side
+      // once the person leaves for their banking app to make the transfer.
       clearCart();
-      redirectToPaygate(pay.payRequestId, pay.checksum);
+      router.push(`/pay/${order.reference}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setPaying(null);
@@ -468,11 +448,11 @@ export default function CheckoutPage() {
               onClick={handlePurchase}
               className="mt-3 w-full bg-ink text-paper py-4 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {paying === "paygate" ? "Redirecting to PayGate..." : !loggedIn ? "Log in to purchase" : "Purchase now"}
+              {paying === "paygate" ? "Preparing transfer details..." : !loggedIn ? "Log in to purchase" : "Purchase now"}
             </button>
             <p className="text-xs text-ink/40 mt-2 text-center">
               {loggedIn ? (
-                "Paid by bank transfer via PayGate. You'll be redirected to complete payment."
+                "Paid by bank transfer. You'll get a dedicated account number to transfer into."
               ) : (
                 <>
                   <Link href="/login" className="underline underline-offset-4">
