@@ -15,7 +15,7 @@ function wrapper(bodyHtml: string) {
           Baronquinn
         </p>
         <p style="font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:#0A0A0A99; margin:8px 0 0;">
-          Curated gifts, delivered
+          Build trust with ease
         </p>
       </div>
 
@@ -25,7 +25,7 @@ function wrapper(bodyHtml: string) {
 
       <div style="text-align:center; margin-top:28px;">
         <p style="font-size:12px; color:#0A0A0A66; line-height:1.7; margin:0;">
-          Flowers, keepsakes, and custom pieces for every occasion — delivered across Nigeria.<br>
+          Flowers, keepsakes, and custom pieces for every occasion.<br>
           <a href="${url}/support" style="color:#0A0A0A99; text-decoration:underline;">Support</a>
           &nbsp;&middot;&nbsp;
           <a href="${url}/terms" style="color:#0A0A0A99; text-decoration:underline;">Terms</a>
@@ -55,7 +55,7 @@ export async function sendVerificationEmail(to: string, name: string, token: str
       <p style="font-size:19px; margin:0 0 16px; color:#0A0A0A;">Hi ${name},</p>
       <p style="font-size:14px; color:#555; line-height:1.7; margin:0 0 28px;">
         Welcome to Baronquinn — we help you send flowers, keepsakes, and custom gifts to the
-        people who matter, delivered across Nigeria. One quick step before you can start
+        people who matter, wherever they are. One quick step before you can start
         ordering: confirm this is really your email address.
       </p>
       <a href="${link}" style="display:inline-block; background:#0A0A0A; color:#FFFFFF; text-decoration:none; padding:14px 32px; font-size:14px; letter-spacing:0.3px;">
