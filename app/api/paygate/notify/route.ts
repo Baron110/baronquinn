@@ -30,15 +30,47 @@ export async function POST(req: NextRequest) {
   }
 
   const data = event.data;
-  const reference: string | undefined = data?.customer?.reference;
   const grossAmount: number = Number(data?.gross_amount ?? data?.amount ?? 0);
 
+  await connectDB();
+
+  // Preferred: PayGate echoes back the reference we set at account creation.
+  let reference: string | undefined = data?.customer?.reference;
+
+  // Fallback — seen in production: some payloads arrive with no `customer`
+  // object at all, despite PayGate's own docs showing one. When that
+  // happens, match by the account number the money actually landed in
+  // instead, which we save on the order/transaction ourselves the moment
+  // the virtual account is created. The account number shows up either as
+  // its own field, or trailing inside the free-text `receiver` string
+  // (e.g. "BUSINESS NAME 6622647378").
   if (!reference) {
-    console.warn("PayGate webhook: no customer.reference on payload", data);
-    return NextResponse.json({ received: true, warning: "no reference" });
+    let accountNumber: string | undefined = data?.virtual_account?.account_number;
+    if (!accountNumber && typeof data?.receiver === "string") {
+      const match = data.receiver.match(/(\d{10,})\s*$/);
+      if (match) accountNumber = match[1];
+    }
+
+    if (accountNumber) {
+      const order = await Order.findOne({ "payment.accountNumber": accountNumber, status: "pending" }).sort({
+        createdAt: -1
+      });
+      if (order) {
+        reference = order.reference;
+      } else {
+        const tx = await WalletTransaction.findOne({
+          "payment.accountNumber": accountNumber,
+          status: "pending"
+        }).sort({ createdAt: -1 });
+        if (tx) reference = tx.reference;
+      }
+    }
   }
 
-  await connectDB();
+  if (!reference) {
+    console.warn("PayGate webhook: could not match this payment to any order or wallet transaction", data);
+    return NextResponse.json({ received: true, warning: "no match found" });
+  }
 
   if (reference.startsWith("wallet-")) {
     return handleWalletDeposit(reference, grossAmount);
