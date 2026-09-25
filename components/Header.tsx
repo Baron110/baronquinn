@@ -141,6 +141,15 @@ export default function Header() {
                 </Link>
               )}
 
+              {status === "authenticated" && (
+                <Link
+                  href="/orders"
+                  className="hidden sm:block text-sm border border-ink px-4 h-10 leading-10 hover:bg-ink hover:text-paper transition-colors"
+                >
+                  Orders
+                </Link>
+              )}
+
               {status === "authenticated" && walletBalance !== null && (
                 <Link
                   href="/wallet"
@@ -216,6 +225,16 @@ export default function Header() {
                 <HomeIcon />
                 Home
               </Link>
+
+              {status === "authenticated" && (
+                <Link
+                  href="/orders"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center h-11 px-3 -mx-3 text-sm"
+                >
+                  Your orders
+                </Link>
+              )}
 
               <p className="text-xs uppercase tracking-wide text-ink/40 mt-6 mb-2">Collections</p>
               <div className="flex flex-col">

@@ -84,7 +84,7 @@ export default function WalletPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reference: deposit.reference,
-          name: session?.user?.name ?? "Baronquinn customer",
+          name: `Baronquinn - ${session?.user?.name ?? "Customer"}`,
           email: session?.user?.email,
           phone
         })

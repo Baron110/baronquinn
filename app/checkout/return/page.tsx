@@ -61,6 +61,14 @@ export default async function CheckoutReturnPage({
               View wallet
             </Link>
           )}
+          {!isWalletDeposit && status === "paid" && searchParams?.REFERENCE && (
+            <Link
+              href={`/orders/${searchParams.REFERENCE}`}
+              className="border border-ink px-6 py-3 text-sm hover:bg-ink hover:text-paper transition-colors"
+            >
+              View receipt
+            </Link>
+          )}
           <Link
             href="/"
             className="bg-ink text-paper px-6 py-3 text-sm hover:opacity-90 transition-opacity"

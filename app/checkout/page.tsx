@@ -202,7 +202,12 @@ export default function CheckoutPage() {
       const vaRes = await fetch("/api/paygate/create-virtual-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reference: order.reference, name: senderName, email, phone: senderPhone })
+        body: JSON.stringify({
+          reference: order.reference,
+          name: `Baronquinn - ${senderName}`,
+          email,
+          phone: senderPhone
+        })
       });
       const va = await vaRes.json();
       if (!vaRes.ok) throw new Error(va.error ?? "Could not start payment.");
