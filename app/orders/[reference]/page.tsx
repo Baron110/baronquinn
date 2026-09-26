@@ -73,6 +73,30 @@ export default async function OrderReceiptPage({ params }: { params: { reference
               <span>{formatNaira(o.amount)}</span>
             </div>
 
+            {o.tracking?.updates && o.tracking.updates.length > 0 && (
+              <div className="mt-8">
+                <h2 className="text-sm uppercase tracking-wide text-ink/50 mb-3">Tracking</h2>
+                <div className="border border-line divide-y divide-line">
+                  {[...o.tracking.updates]
+                    .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                    .map((u: any, i: number) => (
+                      <div key={i} className="p-4">
+                        <p className="text-sm">{u.status}</p>
+                        <p className="text-xs text-ink/40 mt-0.5">
+                          {u.location && <>{u.location} &middot; </>}
+                          {new Date(u.timestamp).toLocaleDateString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric"
+                          })}
+                        </p>
+                        {u.note && <p className="text-xs text-ink/60 mt-1.5">{u.note}</p>}
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
             {o.loveNote && (
               <div className="mt-8">
                 <h2 className="text-sm uppercase tracking-wide text-ink/50 mb-3">Love note</h2>

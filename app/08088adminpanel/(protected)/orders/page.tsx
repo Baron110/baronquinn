@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { formatNaira } from "@/lib/format";
 
 type OrderItem = { productName: string; price: number; quantity: number };
@@ -57,7 +58,11 @@ export default function AdminOrders() {
             </thead>
             <tbody>
               {orders.map((o) => (
-                <tr key={o._id} className="border-b border-line last:border-b-0">
+                <tr
+                  key={o._id}
+                  className="border-b border-line last:border-b-0 hover:bg-bone cursor-pointer"
+                  onClick={() => (window.location.href = `/08088adminpanel/orders/${o.reference}`)}
+                >
                   <td className="p-3 whitespace-nowrap">{new Date(o.createdAt).toLocaleDateString()}</td>
                   <td className="p-3">
                     {o.items.length === 1

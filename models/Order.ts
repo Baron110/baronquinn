@@ -33,6 +33,19 @@ export interface IOrder {
     bankName: string;
     virtualAccountUuid: string;
   };
+  // Manually entered by the admin — deliberately has no field for a
+  // courier, marketplace, or supplier name. Whatever gets typed into
+  // `status`/`location`/`note` is exactly what the customer sees, so
+  // keeping the origin hidden is just a matter of never typing it in.
+  tracking?: {
+    realTrackingNumber?: string; // set once, re-synced on demand — not shown to the customer
+    updates: {
+      status: string;
+      location?: string;
+      note?: string;
+      timestamp: Date;
+    }[];
+  };
   createdAt: Date;
 }
 
@@ -76,6 +89,17 @@ const OrderSchema = new Schema<IOrder>({
     accountName: { type: String },
     bankName: { type: String },
     virtualAccountUuid: { type: String }
+  },
+  tracking: {
+    realTrackingNumber: { type: String },
+    updates: [
+      {
+        status: { type: String, required: true },
+        location: { type: String },
+        note: { type: String },
+        timestamp: { type: Date, default: Date.now }
+      }
+    ]
   },
   createdAt: { type: Date, default: Date.now }
 });

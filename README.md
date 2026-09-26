@@ -32,6 +32,12 @@ PAYGATE_SECRET=           # sk_live_xxx — signs outgoing requests, from Settin
 PAYGATE_WEBHOOK_SECRET=   # separate value, from the Webhooks section — verifies incoming webhooks
 PAYGATE_VA_PROVIDER=palmpay   # or "nomba" — whichever your account is provisioned for
 
+# Real courier tracking (17TRACK + TrackingMore — admin syncs a real
+# tracking number per order; response is stripped of any courier/
+# marketplace/merchant reference before it's stored)
+TRACK17_API_KEY=
+TRACKINGMORE_API_KEY=
+
 # Used to build links in emails, and as the base for the PayGate webhook URL
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
