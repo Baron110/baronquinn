@@ -20,7 +20,14 @@ export default withAuth(
     }
 
     if (token.role !== "admin") {
-      return NextResponse.redirect(new URL("/", req.url));
+      // Don't bounce silently to the customer homepage — that's what reads
+      // as "it just took me to a normal user page" with zero explanation.
+      // Send them back to the login screen with enough context to actually
+      // understand what happened.
+      const url = new URL(ADMIN_LOGIN, req.url);
+      url.searchParams.set("denied", "1");
+      if (typeof token.email === "string") url.searchParams.set("email", token.email);
+      return NextResponse.redirect(url);
     }
 
     return NextResponse.next();

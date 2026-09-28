@@ -3,8 +3,16 @@ import { getTrackingMore } from "./trackingMoreClient";
 import { sanitizeDescription, sanitizeLocation } from "./sanitizer";
 import { ResolvedTracking, ResolvedTrackingEvent, TrackingStatus, getStatusLabel } from "./types";
 
-function parse17Track(raw: any): { status: TrackingStatus; origin: string; destination: string; estimatedDelivery: string | null; events: ResolvedTrackingEvent[] } | null {
-  const info = raw?.track_info;
+type Parsed = {
+  status: TrackingStatus;
+  origin: string;
+  destination: string;
+  estimatedDelivery: string | null;
+  events: ResolvedTrackingEvent[];
+};
+
+function parse17Track(raw: any): Parsed | null {
+  const info = raw?.data?.accepted?.[0]?.track_info;
   if (!info) return null;
 
   const rawEvents: any[] = info?.tracking?.providers?.[0]?.events ?? [];
@@ -34,17 +42,18 @@ function parse17Track(raw: any): { status: TrackingStatus; origin: string; desti
   };
 }
 
-function parseTrackingMore(raw: any): { status: TrackingStatus; origin: string; destination: string; estimatedDelivery: string | null; events: ResolvedTrackingEvent[] } | null {
-  if (!raw) return null;
+function parseTrackingMore(raw: any): Parsed | null {
+  const item = raw?.get?.data?.items?.[0];
+  if (!item) return null;
 
-  const rawEvents: any[] = raw?.origin_info?.trackinfo ?? raw?.tracking_detail ?? [];
+  const rawEvents: any[] = item?.origin_info?.trackinfo ?? item?.tracking_detail ?? [];
   const events: ResolvedTrackingEvent[] = rawEvents.map((e: any) => ({
     timestamp: e.checkpoint_date ?? e.date ?? new Date().toISOString(),
     description: sanitizeDescription(e.tracking_detail ?? e.description ?? e.status_description ?? ""),
     location: sanitizeLocation(e.location ?? "")
   }));
 
-  const sub = (raw?.status ?? raw?.delivery_status ?? "").toLowerCase();
+  const sub = (item?.status ?? item?.delivery_status ?? "").toLowerCase();
   const status: TrackingStatus = sub.includes("delivered")
     ? "delivered"
     : sub.includes("out for delivery") || sub.includes("outfordelivery")
@@ -57,21 +66,30 @@ function parseTrackingMore(raw: any): { status: TrackingStatus; origin: string; 
 
   return {
     status,
-    origin: raw?.origin_info?.country ?? raw?.country ?? "",
-    destination: raw?.destination_info?.country ?? "",
-    estimatedDelivery: raw?.scheduled_delivery_date ?? null,
+    origin: item?.origin_info?.country ?? item?.country ?? "",
+    destination: item?.destination_info?.country ?? "",
+    estimatedDelivery: item?.scheduled_delivery_date ?? null,
     events
   };
 }
 
-// Tries both providers in parallel and keeps whichever actually returned
-// more event history — TrackingMore's free tier is known to sometimes give
-// back only the single latest checkpoint, so this is the real fix rather
-// than trusting one provider blindly.
-export async function resolveTracking(
-  trackingNumber: string,
-  carrierCode?: string
-): Promise<ResolvedTracking | null> {
+function short(value: unknown): string {
+  const s = JSON.stringify(value) ?? "null";
+  return s.length > 350 ? s.slice(0, 350) + "…" : s;
+}
+
+export type ResolveOutcome = {
+  tracking: ResolvedTracking | null;
+  // A provider recognised the number but has no scan events yet.
+  foundNoEvents: boolean;
+  // Short, admin-only summary of what each provider actually returned.
+  debug: string;
+};
+
+// Tries both providers in parallel and keeps whichever returned more event
+// history — TrackingMore's free tier is known to sometimes give back only
+// the latest checkpoint, so trusting one provider blindly isn't safe.
+export async function resolveTracking(trackingNumber: string, carrierCode?: string): Promise<ResolveOutcome> {
   const clean = trackingNumber.trim().toUpperCase();
 
   await register17Track(clean);
@@ -79,31 +97,37 @@ export async function resolveTracking(
   const [raw17, rawTM] = await Promise.all([
     get17Track(clean).catch((err) => {
       console.error("[tracking] 17TRACK failed:", err);
-      return null;
+      return { error: String(err) };
     }),
     getTrackingMore(clean, carrierCode).catch((err) => {
       console.error("[tracking] TrackingMore failed:", err);
-      return null;
+      return { error: String(err) };
     })
   ]);
 
   console.log("[tracking] 17TRACK raw:", JSON.stringify(raw17));
   console.log("[tracking] TrackingMore raw:", JSON.stringify(rawTM));
 
+  const debug = `17TRACK → ${short(raw17)}  |  TrackingMore → ${short(rawTM)}`;
+
   const parsed17 = parse17Track(raw17);
   const parsedTM = parseTrackingMore(rawTM);
 
-  const best =
-    (parsed17?.events.length ?? 0) >= (parsedTM?.events.length ?? 0) ? parsed17 : parsedTM;
+  const best = (parsed17?.events.length ?? 0) >= (parsedTM?.events.length ?? 0) ? parsed17 : parsedTM;
 
-  if (!best) return null;
+  if (!best) return { tracking: null, foundNoEvents: false, debug };
+  if (best.events.length === 0) return { tracking: null, foundNoEvents: true, debug };
 
   return {
-    status: best.status,
-    statusLabel: getStatusLabel(best.status),
-    origin: best.origin,
-    destination: best.destination,
-    estimatedDelivery: best.estimatedDelivery,
-    events: [...best.events].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    tracking: {
+      status: best.status,
+      statusLabel: getStatusLabel(best.status),
+      origin: best.origin,
+      destination: best.destination,
+      estimatedDelivery: best.estimatedDelivery,
+      events: [...best.events].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    },
+    foundNoEvents: false,
+    debug
   };
 }

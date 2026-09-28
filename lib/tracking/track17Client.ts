@@ -18,8 +18,8 @@ export async function register17Track(trackingNumber: string): Promise<void> {
   }
 }
 
-// Returns the raw accepted item, or null if 17TRACK has nothing for this
-// number (unregistered, invalid, or not yet picked up by a carrier).
+// Returns the full JSON body (accepted AND rejected lists) so the caller can
+// see why a number came back empty, not just that it did.
 export async function get17Track(trackingNumber: string): Promise<any | null> {
   const res = await fetch(`${BASE_URL}/gettrackinfo`, {
     method: "POST",
@@ -27,10 +27,6 @@ export async function get17Track(trackingNumber: string): Promise<any | null> {
     body: JSON.stringify([{ number: trackingNumber }]),
     cache: "no-store"
   });
-  if (!res.ok) {
-    console.error("[17TRACK] gettrackinfo failed:", res.status);
-    return null;
-  }
-  const json = await res.json();
-  return json?.data?.accepted?.[0] ?? null;
+  if (!res.ok) console.error("[17TRACK] gettrackinfo failed:", res.status);
+  return res.json().catch(() => null);
 }

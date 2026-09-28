@@ -1,19 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const inputClass =
   "w-full h-11 px-3 bg-transparent border border-white/20 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/60 transition-colors";
 
-export default function AdminLoginPage() {
+function AdminLoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const denied = searchParams.get("denied") === "1";
+  const deniedEmail = searchParams.get("email");
+
+  useEffect(() => {
+    if (session?.user?.role === "admin") {
+      router.push("/08088adminpanel");
+    }
+  }, [session, router]);
+
+  // Landed here because a signed-in account without admin access tried to
+  // open the panel — clear that session immediately rather than leaving it
+  // sitting in the background while they try to sign in as someone else.
+  useEffect(() => {
+    if (denied) signOut({ redirect: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [denied]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,14 +63,26 @@ export default function AdminLoginPage() {
     router.refresh();
   }
 
-  if (session?.user?.role === "admin") {
-    router.push("/08088adminpanel");
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-ink px-5">
       <div className="w-full max-w-sm">
         <p className="text-white/40 text-xs uppercase tracking-widest text-center mb-8">Baronquinn admin</p>
+
+        {denied && (
+          <div className="mb-6 border border-amber-400/30 bg-amber-400/10 px-4 py-3">
+            <p className="text-xs text-amber-200 leading-relaxed">
+              {deniedEmail ? (
+                <>
+                  You were signed in as <strong>{deniedEmail}</strong>, but that account doesn't have admin
+                  access.
+                </>
+              ) : (
+                <>That account doesn't have admin access.</>
+              )}{" "}
+              Sign in with an admin account below.
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
@@ -85,3 +115,12 @@ export default function AdminLoginPage() {
     </div>
   );
 }
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-ink" />}>
+      <AdminLoginForm />
+    </Suspense>
+  );
+}
+

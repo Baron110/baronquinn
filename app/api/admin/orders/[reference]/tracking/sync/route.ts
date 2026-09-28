@@ -17,20 +17,35 @@ export async function POST(req: NextRequest, { params }: { params: { reference: 
   const order = await Order.findOne({ reference: params.reference });
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  let resolved;
+  // Say plainly when a key is missing instead of letting it surface as
+  // "nothing found" — the two look identical from the outside otherwise.
+  const missing = [
+    !process.env.TRACK17_API_KEY && "TRACK17_API_KEY",
+    !process.env.TRACKINGMORE_API_KEY && "TRACKINGMORE_API_KEY"
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    return NextResponse.json(
+      { error: `${missing.join(" and ")} not set on the server. Add ${missing.length > 1 ? "them" : "it"} in Vercel and redeploy.` },
+      { status: 500 }
+    );
+  }
+
+  let outcome;
   try {
-    resolved = await resolveTracking(trackingNumber, carrierCode);
+    outcome = await resolveTracking(trackingNumber, carrierCode);
   } catch (err) {
     console.error("Tracking sync failed:", err);
     return NextResponse.json({ error: "Could not reach the tracking providers" }, { status: 502 });
   }
 
-  if (!resolved) {
-    return NextResponse.json(
-      { error: "Neither provider has anything for this number yet — it may be too new, or check the number." },
-      { status: 404 }
-    );
+  if (!outcome.tracking) {
+    const message = outcome.foundNoEvents
+      ? "A provider recognises this number but has no scan events for it yet. Try again in a few minutes."
+      : `Neither provider returned usable data. What they sent back: ${outcome.debug}`;
+    return NextResponse.json({ error: message }, { status: 404 });
   }
+
+  const resolved = outcome.tracking;
 
   // A fresh sync replaces the timeline with the current real state, rather
   // than appending — the tracking number is the authoritative source once
