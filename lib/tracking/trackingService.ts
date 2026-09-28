@@ -15,12 +15,27 @@ function parse17Track(raw: any): Parsed | null {
   const info = raw?.data?.accepted?.[0]?.track_info;
   if (!info) return null;
 
-  const rawEvents: any[] = info?.tracking?.providers?.[0]?.events ?? [];
-  const events: ResolvedTrackingEvent[] = rawEvents.map((e) => ({
+  // Events can be split across several providers (origin carrier, destination
+  // carrier) — read all of them, not just the first.
+  const providers: any[] = info?.tracking?.providers ?? [];
+  const rawEvents: any[] = providers.flatMap((p) => p?.events ?? []);
+  let events: ResolvedTrackingEvent[] = rawEvents.map((e) => ({
     timestamp: e.time_iso ?? e.time_utc ?? new Date().toISOString(),
     description: sanitizeDescription(e.description ?? e.stage ?? ""),
     location: sanitizeLocation(e.location ?? "")
   }));
+
+  // If the full list is empty but a latest event exists, show that rather
+  // than nothing.
+  if (events.length === 0 && info?.latest_event?.description) {
+    events = [
+      {
+        timestamp: info.latest_event.time_iso ?? new Date().toISOString(),
+        description: sanitizeDescription(info.latest_event.description),
+        location: sanitizeLocation(info.latest_event.location ?? "")
+      }
+    ];
+  }
 
   const sub = (info?.latest_status?.status ?? "").toLowerCase();
   const status: TrackingStatus = sub.includes("delivered")
@@ -75,7 +90,25 @@ function parseTrackingMore(raw: any): Parsed | null {
 
 function short(value: unknown): string {
   const s = JSON.stringify(value) ?? "null";
-  return s.length > 350 ? s.slice(0, 350) + "…" : s;
+  return s.length > 700 ? s.slice(0, 700) + "…" : s;
+}
+
+// The raw 17TRACK body is mostly empty address fields, so a plain cut-off
+// never reaches the part that matters. Pull out just the useful bits.
+function summarise17(raw: any) {
+  const item = raw?.data?.accepted?.[0];
+  const info = item?.track_info;
+  const providers: any[] = info?.tracking?.providers ?? [];
+  return {
+    code: raw?.code,
+    accepted: raw?.data?.accepted?.length ?? 0,
+    rejected: raw?.data?.rejected ?? [],
+    carrier: item?.carrier,
+    latest_status: info?.latest_status,
+    latest_event: info?.latest_event,
+    providers: providers.map((p) => ({ events: p?.events?.length ?? 0 })),
+    sample_event: providers[0]?.events?.[0]
+  };
 }
 
 export type ResolveOutcome = {
@@ -108,7 +141,7 @@ export async function resolveTracking(trackingNumber: string, carrierCode?: stri
   console.log("[tracking] 17TRACK raw:", JSON.stringify(raw17));
   console.log("[tracking] TrackingMore raw:", JSON.stringify(rawTM));
 
-  const debug = `17TRACK → ${short(raw17)}  |  TrackingMore → ${short(rawTM)}`;
+  const debug = `17TRACK → ${short(summarise17(raw17))}  |  TrackingMore → ${short(rawTM)}`;
 
   const parsed17 = parse17Track(raw17);
   const parsedTM = parseTrackingMore(rawTM);
