@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: { reference: 
 
   if (!outcome.tracking) {
     const message = outcome.foundNoEvents
-      ? "A provider recognises this number but has no scan events for it yet. Try again in a few minutes."
+      ? `A provider recognises this number but I found no scan events in what it sent. If the carrier has already scanned it, my parsing is missing them. What they sent back: ${outcome.debug}`
       : `Neither provider returned usable data. What they sent back: ${outcome.debug}`;
     return NextResponse.json({ error: message }, { status: 404 });
   }
