@@ -34,6 +34,8 @@ PAYGATE_VA_PROVIDER=palmpay   # or "nomba" — whichever your account is provisi
 
 # Studio (AI editing tools, paid from wallet balance)
 REPLICATE_API_TOKEN=
+XAI_API_KEY=
+OPENAI_API_KEY=
 
 # Real courier tracking (17TRACK + TrackingMore — admin syncs a real
 # tracking number per order; response is stripped of any courier/

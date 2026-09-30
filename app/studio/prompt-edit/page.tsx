@@ -9,8 +9,9 @@ import { formatNaira } from "@/lib/format";
 
 const COST = 5000;
 
-export default function RemoveBgPage() {
+export default function PromptEditPage() {
   const [image, setImage] = useState<string | null>(null);
+  const [prompt, setPrompt] = useState("");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,15 +21,18 @@ export default function RemoveBgPage() {
       setError("Upload a photo first.");
       return;
     }
+    if (!prompt.trim()) {
+      setError("Describe what you want changed.");
+      return;
+    }
     setError(null);
     setRunning(true);
     setResultUrl(null);
-
     try {
-      const res = await fetch("/api/studio/remove-bg", {
+      const res = await fetch("/api/studio/prompt-edit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image })
+        body: JSON.stringify({ image, prompt })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
@@ -49,14 +53,24 @@ export default function RemoveBgPage() {
           <p className="text-sm text-ink/50">Remove backgrounds, enhance photos, and more.</p>
         </div>
 
-        <StudioTabs active="remove-bg" />
+        <StudioTabs active="prompt-edit" />
 
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">
-            Upload a photo and the background is removed automatically — no prompt needed.
+            Upload a photo and describe the change you want — Grok edits it directly.
           </p>
 
           <StudioUploadBox label="Photo" value={resultUrl ?? image} onChange={setImage} />
+
+          <div className="mt-4">
+            <label className="text-xs font-medium">Describe the change</label>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="e.g. Change the shirt to red, keep everything else the same"
+              className="w-full mt-2 h-20 px-3 py-2 border border-line rounded text-sm resize-none focus:outline-none focus:border-ink"
+            />
+          </div>
 
           {error && <p className="text-xs text-red-700 mt-3">{error}</p>}
 
@@ -67,7 +81,7 @@ export default function RemoveBgPage() {
               disabled={running || !image}
               className="h-10 px-5 bg-ink text-paper text-sm rounded hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {running ? "Processing..." : "Remove background"}
+              {running ? "Processing..." : "Edit photo"}
             </button>
           </div>
         </div>
