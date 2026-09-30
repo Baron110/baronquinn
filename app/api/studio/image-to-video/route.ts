@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     await edit.save();
     console.error("Image to video failed:", err);
     return NextResponse.json(
-      { error: `Could not generate that video. You have not been charged. (${edit.error})` },
+      { error: "Could not generate that video. You have not been charged." },
       { status: 502 }
     );
   }

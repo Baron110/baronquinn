@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     await edit.save();
     console.error("Prompt edit failed:", err);
     return NextResponse.json(
-      { error: `Could not process that edit. You have not been charged. (${edit.error})` },
+      { error: "Could not process that edit. You have not been charged." },
       { status: 502 }
     );
   }

@@ -57,7 +57,7 @@ export default function PromptEditPage() {
 
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">
-            Upload a photo and describe the change you want — Grok edits it directly.
+            Upload a photo and describe the change you want.
           </p>
 
           <StudioUploadBox label="Photo" value={resultUrl ?? image} onChange={setImage} />

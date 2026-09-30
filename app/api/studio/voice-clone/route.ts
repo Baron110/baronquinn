@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     await edit.save();
     console.error("Voice clone failed:", err);
     return NextResponse.json(
-      { error: `Could not generate that clip. You have not been charged. (${edit.error})` },
+      { error: "Could not generate that clip. You have not been charged." },
       { status: 502 }
     );
   }
