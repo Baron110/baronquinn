@@ -150,6 +150,15 @@ export default function Header() {
                 </Link>
               )}
 
+              {status === "authenticated" && (
+                <Link
+                  href="/studio"
+                  className="hidden sm:block text-sm border border-ink px-4 h-10 leading-10 hover:bg-ink hover:text-paper transition-colors"
+                >
+                  Studio
+                </Link>
+              )}
+
               {status === "authenticated" && walletBalance !== null && (
                 <Link
                   href="/wallet"
@@ -233,6 +242,16 @@ export default function Header() {
                   className="flex items-center h-11 px-3 -mx-3 text-sm"
                 >
                   Your orders
+                </Link>
+              )}
+
+              {status === "authenticated" && (
+                <Link
+                  href="/studio"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center h-11 px-3 -mx-3 text-sm"
+                >
+                  Studio
                 </Link>
               )}
 

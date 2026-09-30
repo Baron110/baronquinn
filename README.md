@@ -32,6 +32,9 @@ PAYGATE_SECRET=           # sk_live_xxx — signs outgoing requests, from Settin
 PAYGATE_WEBHOOK_SECRET=   # separate value, from the Webhooks section — verifies incoming webhooks
 PAYGATE_VA_PROVIDER=palmpay   # or "nomba" — whichever your account is provisioned for
 
+# Studio (AI editing tools, paid from wallet balance)
+REPLICATE_API_TOKEN=
+
 # Real courier tracking (17TRACK + TrackingMore — admin syncs a real
 # tracking number per order; response is stripped of any courier/
 # marketplace/merchant reference before it's stored)
