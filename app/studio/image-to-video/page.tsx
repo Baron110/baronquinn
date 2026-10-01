@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import StudioUploadBox from "@/components/StudioUploadBox";
 import StudioTabs from "@/components/StudioTabs";
+import StudioSaveButton from "@/components/StudioSaveButton";
 import { formatNaira } from "@/lib/format";
 
 const COST = 5000;
@@ -89,13 +90,7 @@ export default function ImageToVideoPage() {
         {resultUrl && (
           <div className="mt-5">
             <video src={resultUrl} controls className="w-full border border-line rounded-xl" />
-            <a
-              href={resultUrl}
-              download
-              className="block text-center mt-3 text-xs underline underline-offset-4 text-ink/60 hover:text-ink"
-            >
-              Download video
-            </a>
+            <StudioSaveButton url={resultUrl} filename="baronquinn-video.mp4" mimeType="video/mp4" />
           </div>
         )}
       </main>

@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     edit.status = "completed";
     edit.resultUrl = resultUrl;
     await edit.save();
-    return NextResponse.json({ resultUrl });
+    return NextResponse.json({ resultUrl: `/api/studio/media/${edit._id}` });
   } catch (err) {
     // Processing failed on our side, not the customer's — refund rather
     // than charge someone for a result they never got.

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import StudioTabs from "@/components/StudioTabs";
+import StudioSaveButton from "@/components/StudioSaveButton";
 import { formatNaira } from "@/lib/format";
 
 const COST = 5000;
@@ -113,13 +114,7 @@ export default function VoiceClonePage() {
           {resultUrl && (
             <div className="mt-5 pt-5 border-t border-line">
               <audio controls src={resultUrl} className="w-full" />
-              <a
-                href={resultUrl}
-                download
-                className="block text-center mt-3 text-xs underline underline-offset-4 text-ink/60 hover:text-ink"
-              >
-                Download
-              </a>
+              <StudioSaveButton url={resultUrl} filename="baronquinn-voice.mp3" mimeType="audio/mpeg" />
             </div>
           )}
         </div>

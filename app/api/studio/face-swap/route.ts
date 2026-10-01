@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     edit.status = "completed";
     edit.resultUrl = resultUrl;
     await edit.save();
-    return NextResponse.json({ resultUrl });
+    return NextResponse.json({ resultUrl: `/api/studio/media/${edit._id}` });
   } catch (err) {
     await User.findByIdAndUpdate(session.user.id, { $inc: { walletBalance: COST } });
     edit.status = "failed";
