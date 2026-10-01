@@ -6,6 +6,7 @@ import User from "@/models/User";
 import Edit from "@/models/Edit";
 import { grokFaceSwap } from "@/lib/studio/xai";
 import { runReplicateModel } from "@/lib/studio/replicate";
+import { rehostResult } from "@/lib/studio/cloudinaryServer";
 
 const COST = 5000;
 const FALLBACK_MODEL = "codeplugtech/face-swap:278a81e7ebb22db98bcba54de985d22cc1abeead2754eb1f2af717247be69b34";
@@ -43,13 +44,14 @@ export async function POST(req: NextRequest) {
   });
 
   try {
-    let resultUrl: string;
+    let rawResultUrl: string;
     try {
-      resultUrl = await grokFaceSwap(targetImage, sourceImage);
+      rawResultUrl = await grokFaceSwap(targetImage, sourceImage);
     } catch (grokErr) {
       console.warn("Grok face swap failed, falling back to Replicate:", grokErr);
-      resultUrl = await runReplicateModel(FALLBACK_MODEL, { swap_image: sourceImage, input_image: targetImage });
+      rawResultUrl = await runReplicateModel(FALLBACK_MODEL, { swap_image: sourceImage, input_image: targetImage });
     }
+    const resultUrl = await rehostResult(rawResultUrl, "image");
     edit.status = "completed";
     edit.resultUrl = resultUrl;
     await edit.save();

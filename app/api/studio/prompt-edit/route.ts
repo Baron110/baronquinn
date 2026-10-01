@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User";
 import Edit from "@/models/Edit";
 import { grokImageEdit } from "@/lib/studio/xai";
+import { rehostResult } from "@/lib/studio/cloudinaryServer";
 
 const COST = 5000;
 
@@ -39,7 +40,8 @@ export async function POST(req: NextRequest) {
   });
 
   try {
-    const resultUrl = await grokImageEdit(image, prompt);
+    const rawResultUrl = await grokImageEdit(image, prompt);
+    const resultUrl = await rehostResult(rawResultUrl, "image");
     edit.status = "completed";
     edit.resultUrl = resultUrl;
     await edit.save();

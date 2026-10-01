@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User";
 import Edit from "@/models/Edit";
 import { runReplicateModel } from "@/lib/studio/replicate";
+import { rehostResult } from "@/lib/studio/cloudinaryServer";
 
 const COST = 5000;
 const MODEL = "philz1337x/clarity-upscaler:dfad41707589d68ecdccd1dfa600d55a208f9310748e44bfe35b4a6291453d5e";
@@ -39,7 +40,8 @@ export async function POST(req: NextRequest) {
   });
 
   try {
-    const resultUrl = await runReplicateModel(MODEL, { input_image: image, scale_factor: 2, dynamic: 6 });
+    const rawResultUrl = await runReplicateModel(MODEL, { input_image: image, scale_factor: 2, dynamic: 6 });
+    const resultUrl = await rehostResult(rawResultUrl, "image");
     edit.status = "completed";
     edit.resultUrl = resultUrl;
     await edit.save();

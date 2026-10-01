@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User";
 import Edit from "@/models/Edit";
 import { runReplicateModel } from "@/lib/studio/replicate";
+import { rehostResult } from "@/lib/studio/cloudinaryServer";
 
 const COST = 5000;
 const MODEL = "lucataco/remove-bg:95fcc2a26d3899cd6c2691c900465aaeff466285d65c14638cc5f36f34befaf1";
@@ -43,7 +44,8 @@ export async function POST(req: NextRequest) {
   });
 
   try {
-    const resultUrl = await runReplicateModel(MODEL, { image });
+    const rawResultUrl = await runReplicateModel(MODEL, { image });
+    const resultUrl = await rehostResult(rawResultUrl, "image");
     edit.status = "completed";
     edit.resultUrl = resultUrl;
     await edit.save();
