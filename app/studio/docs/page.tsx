@@ -67,8 +67,6 @@ export default function DocsPage() {
         </div>
 
         <StudioTabs active="docs" />
-
-        <StudioDisclaimer />
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">Pick a template, add the details, and get a ready draft.</p>
 
@@ -141,7 +139,8 @@ export default function DocsPage() {
             </div>
           )}
         </div>
-      </main>
+              <StudioDisclaimer />
+</main>
       <Footer />
     </>
   );

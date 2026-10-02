@@ -55,8 +55,6 @@ export default function EnhancePage() {
         </div>
 
         <StudioTabs active="enhance" />
-
-        <StudioDisclaimer />
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">Sharpen and upscale a photo — good for blurry or low-res images.</p>
 
@@ -91,7 +89,8 @@ export default function EnhancePage() {
             </div>
           </>
         )}
-      </main>
+              <StudioDisclaimer />
+</main>
       <Footer />
     </>
   );

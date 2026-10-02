@@ -75,8 +75,6 @@ export default function VoiceClonePage() {
         </div>
 
         <StudioTabs active="voice-clone" />
-
-        <StudioDisclaimer />
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">
             Upload a short voice sample (1-2 minutes of clear speech), then type anything — it comes back read in
@@ -138,7 +136,8 @@ export default function VoiceClonePage() {
             </div>
           )}
         </div>
-      </main>
+              <StudioDisclaimer />
+</main>
       <Footer />
     </>
   );

@@ -63,8 +63,6 @@ export default function RemoveBgPage() {
         </div>
 
         <StudioTabs active="remove-bg" />
-
-        <StudioDisclaimer />
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">
             Upload a photo and the background is removed automatically — no prompt needed.
@@ -103,7 +101,8 @@ export default function RemoveBgPage() {
             </div>
           </>
         )}
-      </main>
+              <StudioDisclaimer />
+</main>
       <Footer />
     </>
   );

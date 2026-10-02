@@ -60,8 +60,6 @@ export default function ImageToVideoPage() {
         </div>
 
         <StudioTabs active="image-to-video" />
-
-        <StudioDisclaimer />
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">
             Upload a photo and describe how it should move. This takes 1–2 minutes.
@@ -108,7 +106,8 @@ export default function ImageToVideoPage() {
             </div>
           </div>
         )}
-      </main>
+              <StudioDisclaimer />
+</main>
       <Footer />
     </>
   );

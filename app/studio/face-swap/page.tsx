@@ -56,8 +56,6 @@ export default function FaceSwapPage() {
         </div>
 
         <StudioTabs active="face-swap" />
-
-        <StudioDisclaimer />
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">
             Upload the photo to edit, then the photo with the face to swap in.
@@ -97,7 +95,8 @@ export default function FaceSwapPage() {
             </div>
           </>
         )}
-      </main>
+              <StudioDisclaimer />
+</main>
       <Footer />
     </>
   );
