@@ -76,6 +76,38 @@ export async function sendVerificationEmail(to: string, name: string, token: str
   });
 }
 
+// Notifies you (not the customer) when someone submits the support form —
+// sent to SUPPORT_NOTIFY_EMAIL, set that to whichever inbox you want these
+// to land in.
+export async function sendSupportRequestEmail(fromName: string, fromEmail: string, message: string) {
+  const notifyTo = process.env.SUPPORT_NOTIFY_EMAIL;
+  if (!notifyTo) {
+    console.warn("SUPPORT_NOTIFY_EMAIL not set — support request not sent. From:", fromEmail, "Message:", message);
+    return;
+  }
+
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set — skipping support request email.");
+    return;
+  }
+
+  await resend.emails.send({
+    from: FROM_EMAIL,
+    to: notifyTo,
+    reply_to: fromEmail,
+    subject: `Support request from ${fromName}`,
+    html: wrapper(`
+      <p style="font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:#9A3B12; font-weight:600; margin:0 0 14px;">
+        New support request
+      </p>
+      <p style="font-size:14px; color:#0A0A0A; margin:0 0 4px;"><strong>${fromName}</strong></p>
+      <p style="font-size:13px; color:#999; margin:0 0 20px;">${fromEmail}</p>
+      <p style="font-size:14px; color:#333; line-height:1.7; white-space:pre-wrap; margin:0;">${message}</p>
+    `)
+  });
+}
+
 export async function sendOrderConfirmationEmail(
   to: string,
   order: {

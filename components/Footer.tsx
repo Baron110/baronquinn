@@ -7,6 +7,7 @@ export default function Footer() {
         <p className="font-display text-lg">Baronquinn</p>
         <div className="flex gap-6 text-sm text-ink/60">
           <Link href="/terms" className="hover:text-ink">Terms</Link>
+          <Link href="/privacy" className="hover:text-ink">Privacy</Link>
           <Link href="/support" className="hover:text-ink">Support</Link>
         </div>
       </div>

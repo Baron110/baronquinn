@@ -43,6 +43,9 @@ OPENAI_API_KEY=
 TRACK17_API_KEY=
 TRACKINGMORE_API_KEY=
 
+# Support page contact form — sends a notification email here when someone submits it
+SUPPORT_NOTIFY_EMAIL=
+
 # Used to build links in emails, and as the base for the PayGate webhook URL
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
