@@ -83,6 +83,20 @@ export default function SignupPage() {
             <p className="text-xs text-ink/40 mt-1.5">Must be at least 8 characters</p>
           </div>
 
+          <label className="flex items-start gap-2.5 text-xs text-ink/60 leading-relaxed">
+            <input type="checkbox" required className="mt-0.5 shrink-0" />
+            <span>
+              I agree to the{" "}
+              <Link href="/terms" target="_blank" className="underline underline-offset-4 text-ink hover:text-ink/70">
+                Terms
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" target="_blank" className="underline underline-offset-4 text-ink hover:text-ink/70">
+                Privacy Policy
+              </Link>
+            </span>
+          </label>
+
           {error && <p className="text-xs text-red-700">{error}</p>}
 
           <button
