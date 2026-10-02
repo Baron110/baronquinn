@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/mongodb";
-import User from "@/models/User";
-import Edit from "@/models/Edit";
 import { createVoiceClone, generateClonedSpeech } from "@/lib/studio/xai";
 import { uploadAudioBuffer } from "@/lib/studio/cloudinaryServer";
+import { beginGeneration, completeGeneration, refundGeneration } from "@/lib/studio/charge";
 
 const COST = 5000;
 
@@ -15,47 +14,36 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Log in to use Studio tools." }, { status: 401 });
   }
 
-  const { audioBase64, mimeType, text } = await req.json();
+  const { audioBase64, mimeType, text, regenerateEditId } = await req.json();
   if (!audioBase64 || !text?.trim()) {
     return NextResponse.json({ error: "A voice sample and some text are required." }, { status: 400 });
   }
 
   await connectDB();
 
-  const debited = await User.findOneAndUpdate(
-    { _id: session.user.id, walletBalance: { $gte: COST } },
-    { $inc: { walletBalance: -COST } }
-  );
-  if (!debited) {
-    return NextResponse.json({ error: "Not enough wallet balance for this." }, { status: 402 });
-  }
-
-  const edit = await Edit.create({
-    user: session.user.id,
+  const begin = await beginGeneration({
+    userId: session.user.id,
     type: "voice-clone",
+    cost: COST,
     prompt: text,
-    status: "processing",
-    cost: COST
+    regenerateEditId
   });
+  if (!begin.ok) {
+    return NextResponse.json({ error: begin.error }, { status: begin.status });
+  }
+  const { edit, chargeKind } = begin;
 
   try {
     const voiceId = await createVoiceClone(audioBase64, mimeType || "audio/mpeg");
     const speechBuffer = await generateClonedSpeech(voiceId, text);
     const resultUrl = await uploadAudioBuffer(speechBuffer);
-
-    edit.status = "completed";
-    edit.resultUrl = resultUrl;
-    await edit.save();
-    return NextResponse.json({ resultUrl: `/api/studio/media/${edit._id}` });
+    await completeGeneration(edit, chargeKind, resultUrl);
+    return NextResponse.json({ editId: edit._id, previewUrl: `/api/studio/media/${edit._id}` });
   } catch (err) {
-    await User.findByIdAndUpdate(session.user.id, { $inc: { walletBalance: COST } });
-    edit.status = "failed";
-    edit.error = err instanceof Error ? err.message : "Unknown error";
-    await edit.save();
+    const message = err instanceof Error ? err.message : "Unknown error";
+    await refundGeneration(session.user.id, chargeKind, COST, edit, message);
     console.error("Voice clone failed:", err);
-    return NextResponse.json(
-      { error: "Could not generate that clip. You have not been charged." },
-      { status: 502 }
-    );
+    const chargeNote = chargeKind === "wallet" ? " You have not been charged." : "";
+    return NextResponse.json({ error: `Could not generate that clip.${chargeNote}` }, { status: 502 });
   }
 }

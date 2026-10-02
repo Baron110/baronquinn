@@ -23,6 +23,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <div className="max-w-content mx-auto px-5 py-8">
         <nav className="flex gap-6 text-sm border-b border-line mb-8 pb-4">
           <Link href="/08088adminpanel" className="hover:opacity-60">Dashboard</Link>
+          <Link href="/08088adminpanel/analytics" className="hover:opacity-60">Analytics</Link>
           <Link href="/08088adminpanel/products" className="hover:opacity-60">Products</Link>
           <Link href="/08088adminpanel/categories" className="hover:opacity-60">Categories</Link>
           <Link href="/08088adminpanel/orders" className="hover:opacity-60">Orders</Link>

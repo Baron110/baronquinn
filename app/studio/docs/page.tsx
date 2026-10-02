@@ -4,6 +4,7 @@ import { useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import StudioTabs from "@/components/StudioTabs";
+import StudioDisclaimer from "@/components/StudioDisclaimer";
 import { formatNaira } from "@/lib/format";
 import { DOC_TEMPLATES } from "@/lib/studio/docTemplates";
 
@@ -13,31 +14,35 @@ const CATEGORIES = ["Business", "Legal", "Certificate", "Personal", "ID & Cards"
 export default function DocsPage() {
   const [templateId, setTemplateId] = useState(DOC_TEMPLATES[0].id);
   const [details, setDetails] = useState("");
+  const [editId, setEditId] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const [regenUsed, setRegenUsed] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const template = DOC_TEMPLATES.find((t) => t.id === templateId)!;
 
-  async function handleRun() {
+  async function handleRun(isRegenerate = false) {
     if (!details.trim()) {
       setError("Add a few details first.");
       return;
     }
     setError(null);
     setRunning(true);
-    setResult(null);
+    if (!isRegenerate) setResult(null);
 
     try {
       const res = await fetch("/api/studio/docs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateId, details })
+        body: JSON.stringify({ templateId, details, regenerateEditId: isRegenerate ? editId : undefined })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
       setResult(data.text);
+      setEditId(data.editId);
+      if (isRegenerate) setRegenUsed(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -63,6 +68,7 @@ export default function DocsPage() {
 
         <StudioTabs active="docs" />
 
+        <StudioDisclaimer />
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">Pick a template, add the details, and get a ready draft.</p>
 
@@ -104,7 +110,7 @@ export default function DocsPage() {
           <div className="flex items-center justify-between border-t border-line pt-4">
             <span className="text-sm text-ink/60">Cost: {formatNaira(COST)}</span>
             <button
-              onClick={handleRun}
+              onClick={() => handleRun(false)}
               disabled={running || !details.trim()}
               className="h-10 px-5 bg-ink text-paper text-sm rounded hover:opacity-90 transition-opacity disabled:opacity-50"
             >
@@ -112,7 +118,7 @@ export default function DocsPage() {
             </button>
           </div>
 
-          {result && (
+          {result && editId && (
             <div className="mt-5 pt-5 border-t border-line">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-medium">Result</p>
@@ -123,6 +129,15 @@ export default function DocsPage() {
               <pre className="whitespace-pre-wrap text-sm bg-bone border border-line rounded p-4 max-h-96 overflow-y-auto">
                 {result}
               </pre>
+              <div className="text-center mt-3">
+                <button
+                  onClick={() => handleRun(true)}
+                  disabled={running}
+                  className="text-xs underline underline-offset-4 text-ink/50 hover:text-ink disabled:opacity-50"
+                >
+                  {regenUsed ? `Not quite right? Try again (${formatNaira(COST)})` : "Not quite right? Try again — free, one time"}
+                </button>
+              </div>
             </div>
           )}
         </div>

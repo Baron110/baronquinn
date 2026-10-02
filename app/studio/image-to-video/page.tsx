@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import StudioUploadBox from "@/components/StudioUploadBox";
 import StudioTabs from "@/components/StudioTabs";
+import StudioDisclaimer from "@/components/StudioDisclaimer";
 import StudioSaveButton from "@/components/StudioSaveButton";
 import { formatNaira } from "@/lib/format";
 
@@ -13,11 +14,13 @@ const COST = 5000;
 export default function ImageToVideoPage() {
   const [image, setImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
-  const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [regenUsed, setRegenUsed] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleRun() {
+  async function handleRun(isRegenerate = false) {
     if (!image) {
       setError("Upload a photo first.");
       return;
@@ -28,16 +31,18 @@ export default function ImageToVideoPage() {
     }
     setError(null);
     setRunning(true);
-    setResultUrl(null);
+    if (!isRegenerate) setPreviewUrl(null);
     try {
       const res = await fetch("/api/studio/image-to-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image, prompt })
+        body: JSON.stringify({ image, prompt, regenerateEditId: isRegenerate ? editId : undefined })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
-      setResultUrl(data.resultUrl);
+      setPreviewUrl(data.previewUrl);
+      setEditId(data.editId);
+      if (isRegenerate) setRegenUsed(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -56,6 +61,7 @@ export default function ImageToVideoPage() {
 
         <StudioTabs active="image-to-video" />
 
+        <StudioDisclaimer />
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">
             Upload a photo and describe how it should move. This takes 1–2 minutes.
@@ -78,7 +84,7 @@ export default function ImageToVideoPage() {
           <div className="flex items-center justify-between border-t border-line pt-4 mt-6">
             <span className="text-sm text-ink/60">Cost: {formatNaira(COST)}</span>
             <button
-              onClick={handleRun}
+              onClick={() => handleRun(false)}
               disabled={running || !image}
               className="h-10 px-5 bg-ink text-paper text-sm rounded hover:opacity-90 transition-opacity disabled:opacity-50"
             >
@@ -87,10 +93,19 @@ export default function ImageToVideoPage() {
           </div>
         </div>
 
-        {resultUrl && (
+        {previewUrl && editId && (
           <div className="mt-5">
-            <video src={resultUrl} controls className="w-full border border-line rounded-xl" />
-            <StudioSaveButton url={resultUrl} filename="baronquinn-video.mp4" mimeType="video/mp4" />
+            <video src={previewUrl} controls className="w-full border border-line rounded-xl" />
+            <StudioSaveButton editId={editId} filename="baronquinn-video.mp4" mimeType="video/mp4" />
+            <div className="text-center mt-2">
+              <button
+                onClick={() => handleRun(true)}
+                disabled={running}
+                className="text-xs underline underline-offset-4 text-ink/50 hover:text-ink disabled:opacity-50"
+              >
+                {regenUsed ? `Not quite right? Try again (${formatNaira(COST)})` : "Not quite right? Try again — free, one time"}
+              </button>
+            </div>
           </div>
         )}
       </main>

@@ -1,39 +1,51 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import StudioUploadBox from "@/components/StudioUploadBox";
 import StudioTabs from "@/components/StudioTabs";
+import StudioDisclaimer from "@/components/StudioDisclaimer";
 import StudioSaveButton from "@/components/StudioSaveButton";
 import { formatNaira } from "@/lib/format";
 
 const COST = 5000;
 
+const TABS = [
+  { slug: "remove-bg", name: "Remove background", live: true },
+  { slug: "enhance", name: "Enhance", live: false },
+  { slug: "prompt-edit", name: "Prompt edit", live: false }
+];
+
 export default function RemoveBgPage() {
   const [image, setImage] = useState<string | null>(null);
-  const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [regenUsed, setRegenUsed] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleRun() {
+  async function handleRun(isRegenerate = false) {
     if (!image) {
       setError("Upload a photo first.");
       return;
     }
     setError(null);
     setRunning(true);
-    setResultUrl(null);
+    if (!isRegenerate) setPreviewUrl(null);
 
     try {
       const res = await fetch("/api/studio/remove-bg", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image })
+        body: JSON.stringify({ image, regenerateEditId: isRegenerate ? editId : undefined })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
-      setResultUrl(data.resultUrl);
+      setPreviewUrl(data.previewUrl);
+      setEditId(data.editId);
+      if (isRegenerate) setRegenUsed(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -52,19 +64,20 @@ export default function RemoveBgPage() {
 
         <StudioTabs active="remove-bg" />
 
+        <StudioDisclaimer />
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">
             Upload a photo and the background is removed automatically — no prompt needed.
           </p>
 
-          <StudioUploadBox label="Photo" value={resultUrl ?? image} onChange={setImage} />
+          <StudioUploadBox label="Photo" value={previewUrl ?? image} onChange={setImage} />
 
           {error && <p className="text-xs text-red-700 mt-3">{error}</p>}
 
           <div className="flex items-center justify-between border-t border-line pt-4 mt-6">
             <span className="text-sm text-ink/60">Cost: {formatNaira(COST)}</span>
             <button
-              onClick={handleRun}
+              onClick={() => handleRun(false)}
               disabled={running || !image}
               className="h-10 px-5 bg-ink text-paper text-sm rounded hover:opacity-90 transition-opacity disabled:opacity-50"
             >
@@ -73,7 +86,23 @@ export default function RemoveBgPage() {
           </div>
         </div>
 
-        {resultUrl && <StudioSaveButton url={resultUrl} filename="baronquinn-remove-bg.png" mimeType="image/png" />}
+        {previewUrl && editId && (
+          <>
+            <p className="text-center text-xs text-ink/40 mt-4">
+              Preview is watermarked — Save removes it.
+            </p>
+            <StudioSaveButton editId={editId} filename="baronquinn-remove-bg.png" mimeType="image/png" />
+            <div className="text-center mt-2">
+              <button
+                onClick={() => handleRun(true)}
+                disabled={running}
+                className="text-xs underline underline-offset-4 text-ink/50 hover:text-ink disabled:opacity-50"
+              >
+                {regenUsed ? `Not quite right? Try again (${formatNaira(COST)})` : "Not quite right? Try again — free, one time"}
+              </button>
+            </div>
+          </>
+        )}
       </main>
       <Footer />
     </>

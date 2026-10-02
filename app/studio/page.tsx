@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { connectDB } from "@/lib/mongodb";
+import User from "@/models/User";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { formatNaira } from "@/lib/format";
@@ -15,15 +19,29 @@ const TOOLS = [
 
 const COST = 5000;
 
-export default function StudioPage() {
+export default async function StudioPage() {
+  const session = await getServerSession(authOptions);
+  let freeEditsRemaining = 0;
+  if (session?.user) {
+    await connectDB();
+    const user = await User.findById(session.user.id).select("freeEditsRemaining").lean();
+    freeEditsRemaining = (user as any)?.freeEditsRemaining ?? 0;
+  }
+
   return (
     <>
       <Header />
       <main className="max-w-content mx-auto px-5 py-10">
         <h1 className="text-2xl mb-2">Studio</h1>
-        <p className="text-sm text-ink/50 mb-10">
+        <p className="text-sm text-ink/50 mb-2">
           AI-powered editing tools, paid from your wallet — {formatNaira(COST)} per result.
         </p>
+        {freeEditsRemaining > 0 && (
+          <p className="text-sm text-green-700 mb-8">
+            You have {freeEditsRemaining} free edit{freeEditsRemaining > 1 ? "s" : ""} remaining.
+          </p>
+        )}
+        {freeEditsRemaining === 0 && <div className="mb-8" />}
 
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
           {TOOLS.map((tool) =>

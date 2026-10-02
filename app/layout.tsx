@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import Providers from "@/components/Providers";
 import { CartProvider } from "@/lib/cart-context";
+import PageViewTracker from "@/components/PageViewTracker";
 import "./globals.css";
 
 const display = Fraunces({
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <CartProvider>{children}</CartProvider>
         </Providers>
+        <PageViewTracker />
       </body>
     </html>
   );

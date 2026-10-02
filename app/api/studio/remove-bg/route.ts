@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/mongodb";
-import User from "@/models/User";
-import Edit from "@/models/Edit";
 import { runReplicateModel } from "@/lib/studio/replicate";
 import { rehostResult } from "@/lib/studio/cloudinaryServer";
+import { beginGeneration, completeGeneration, refundGeneration } from "@/lib/studio/charge";
 
 const COST = 5000;
 const MODEL = "lucataco/remove-bg:95fcc2a26d3899cd6c2691c900465aaeff466285d65c14638cc5f36f34befaf1";
@@ -16,48 +15,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Log in to use Studio tools." }, { status: 401 });
   }
 
-  const { image } = await req.json();
+  const { image, regenerateEditId } = await req.json();
   if (!image) {
     return NextResponse.json({ error: "An image is required." }, { status: 400 });
   }
 
   await connectDB();
 
-  // Same atomic pattern as paying for an order with wallet balance — the
-  // balance check and the deduction happen in one operation, so two
-  // requests firing at once can't both succeed against a balance that only
-  // covers one of them.
-  const debited = await User.findOneAndUpdate(
-    { _id: session.user.id, walletBalance: { $gte: COST } },
-    { $inc: { walletBalance: -COST } }
-  );
-  if (!debited) {
-    return NextResponse.json({ error: "Not enough wallet balance for this." }, { status: 402 });
-  }
-
-  const edit = await Edit.create({
-    user: session.user.id,
+  const begin = await beginGeneration({
+    userId: session.user.id,
     type: "remove-bg",
+    cost: COST,
     originalImage: image,
-    status: "processing",
-    cost: COST
+    regenerateEditId
   });
+  if (!begin.ok) {
+    return NextResponse.json({ error: begin.error }, { status: begin.status });
+  }
+  const { edit, chargeKind } = begin;
 
   try {
     const rawResultUrl = await runReplicateModel(MODEL, { image });
     const resultUrl = await rehostResult(rawResultUrl, "image");
-    edit.status = "completed";
-    edit.resultUrl = resultUrl;
-    await edit.save();
-    return NextResponse.json({ resultUrl: `/api/studio/media/${edit._id}` });
+    await completeGeneration(edit, chargeKind, resultUrl);
+    return NextResponse.json({ editId: edit._id, previewUrl: `/api/studio/media/${edit._id}?preview=1` });
   } catch (err) {
-    // Processing failed on our side, not the customer's — refund rather
-    // than charge someone for a result they never got.
-    await User.findByIdAndUpdate(session.user.id, { $inc: { walletBalance: COST } });
-    edit.status = "failed";
-    edit.error = err instanceof Error ? err.message : "Unknown error";
-    await edit.save();
+    const message = err instanceof Error ? err.message : "Unknown error";
+    await refundGeneration(session.user.id, chargeKind, COST, edit, message);
     console.error("Remove BG failed:", err);
-    return NextResponse.json({ error: "Could not process that image. You have not been charged." }, { status: 502 });
+    const chargeNote = chargeKind === "wallet" ? " You have not been charged." : "";
+    return NextResponse.json({ error: `Could not process that image.${chargeNote}` }, { status: 502 });
   }
 }

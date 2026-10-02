@@ -3,22 +3,27 @@
 import { useState } from "react";
 
 export default function StudioSaveButton({
-  url,
+  editId,
   filename,
   mimeType
 }: {
-  url: string;
+  editId: string;
   filename: string;
   mimeType: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Deliberately no "preview" query param — this is the one place that
+  // fetches the clean, unwatermarked result. The on-page <img>/<video>/
+  // <audio> tags only ever show the watermarked version.
+  const cleanUrl = `/api/studio/media/${editId}`;
+
   async function handleSave() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(url);
+      const res = await fetch(cleanUrl);
       const blob = await res.blob();
       const file = new File([blob], filename, { type: mimeType });
 
@@ -55,9 +60,9 @@ export default function StudioSaveButton({
       <button
         onClick={handleSave}
         disabled={busy}
-        className="text-xs underline underline-offset-4 text-ink/60 hover:text-ink disabled:opacity-50"
+        className="h-10 px-5 bg-ink text-paper text-sm rounded hover:opacity-90 transition-opacity disabled:opacity-50"
       >
-        {busy ? "Preparing..." : "Save"}
+        {busy ? "Preparing..." : "Save (removes watermark)"}
       </button>
       {error && <p className="text-xs text-red-700 mt-1">{error}</p>}
     </div>

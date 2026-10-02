@@ -162,7 +162,7 @@ export default function Header() {
               {status === "authenticated" && walletBalance !== null && (
                 <Link
                   href="/wallet"
-                  className="text-xs sm:text-sm border border-ink px-3 sm:px-4 h-10 leading-10 hover:bg-ink hover:text-paper transition-colors"
+                  className="text-xs sm:text-sm border border-ink px-3 sm:px-4 h-10 leading-10 whitespace-nowrap hover:bg-ink hover:text-paper transition-colors"
                 >
                   {formatNaira(walletBalance)}
                 </Link>

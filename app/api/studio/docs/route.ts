@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/mongodb";
-import User from "@/models/User";
-import Edit from "@/models/Edit";
 import { generateDocument } from "@/lib/studio/openai";
 import { DOC_TEMPLATES } from "@/lib/studio/docTemplates";
+import { beginGeneration, completeGeneration, refundGeneration } from "@/lib/studio/charge";
 
 const COST = 5000;
 
@@ -15,7 +14,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Log in to use Studio tools." }, { status: 401 });
   }
 
-  const { templateId, details } = await req.json();
+  const { templateId, details, regenerateEditId } = await req.json();
   const template = DOC_TEMPLATES.find((t) => t.id === templateId);
   if (!template) {
     return NextResponse.json({ error: "Unknown template." }, { status: 400 });
@@ -26,36 +25,30 @@ export async function POST(req: NextRequest) {
 
   await connectDB();
 
-  const debited = await User.findOneAndUpdate(
-    { _id: session.user.id, walletBalance: { $gte: COST } },
-    { $inc: { walletBalance: -COST } }
-  );
-  if (!debited) {
-    return NextResponse.json({ error: "Not enough wallet balance for this." }, { status: 402 });
-  }
-
-  const edit = await Edit.create({
-    user: session.user.id,
+  const begin = await beginGeneration({
+    userId: session.user.id,
     type: "docs",
+    cost: COST,
     prompt: `${template.name}: ${details}`,
-    status: "processing",
-    cost: COST
+    regenerateEditId
   });
+  if (!begin.ok) {
+    return NextResponse.json({ error: begin.error }, { status: begin.status });
+  }
+  const { edit, chargeKind } = begin;
 
   try {
     const text = await generateDocument(template.systemPrompt, details);
-    edit.status = "completed";
-    await edit.save();
-    return NextResponse.json({ text });
+    // Docs produces plain text, not a file — resultUrl isn't used the same
+    // way here, but still marked completed so it shows correctly in order
+    // history and the free-regenerate check still works the same.
+    await completeGeneration(edit, chargeKind, "");
+    return NextResponse.json({ editId: edit._id, text });
   } catch (err) {
-    await User.findByIdAndUpdate(session.user.id, { $inc: { walletBalance: COST } });
-    edit.status = "failed";
-    edit.error = err instanceof Error ? err.message : "Unknown error";
-    await edit.save();
+    const message = err instanceof Error ? err.message : "Unknown error";
+    await refundGeneration(session.user.id, chargeKind, COST, edit, message);
     console.error("Docs generation failed:", err);
-    return NextResponse.json(
-      { error: "Could not generate that document. You have not been charged." },
-      { status: 502 }
-    );
+    const chargeNote = chargeKind === "wallet" ? " You have not been charged." : "";
+    return NextResponse.json({ error: `Could not generate that document.${chargeNote}` }, { status: 502 });
   }
 }

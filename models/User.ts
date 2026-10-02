@@ -11,6 +11,8 @@ export interface IUser {
   verificationToken?: string;
   verificationTokenExpires?: Date;
   walletBalance: number;
+  freeEditsRemaining: number;
+  hasReceivedFirstDepositBonus: boolean;
   createdAt: Date;
 }
 
@@ -23,6 +25,8 @@ const UserSchema = new Schema<IUser>({
   verificationToken: { type: String },
   verificationTokenExpires: { type: Date },
   walletBalance: { type: Number, default: 0 },
+  freeEditsRemaining: { type: Number, default: 0 },
+  hasReceivedFirstDepositBonus: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 

@@ -102,6 +102,16 @@ async function handleWalletDeposit(reference: string, grossAmount: number) {
   await tx.save();
   await User.findByIdAndUpdate(tx.user, { $inc: { walletBalance: tx.amount } });
 
+  // First deposit of ₦5,000+ ever grants 3 free Studio edits — atomic guard
+  // via hasReceivedFirstDepositBonus so this can only ever fire once per
+  // account, no matter how many deposits come in afterward.
+  if (tx.amount >= 5000) {
+    await User.findOneAndUpdate(
+      { _id: tx.user, hasReceivedFirstDepositBonus: { $ne: true } },
+      { $inc: { freeEditsRemaining: 3 }, $set: { hasReceivedFirstDepositBonus: true } }
+    );
+  }
+
   return NextResponse.json({ received: true });
 }
 

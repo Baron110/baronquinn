@@ -13,7 +13,7 @@ export async function GET() {
 
   await connectDB();
 
-  const user = await User.findById(session.user.id).select("walletBalance");
+  const user = await User.findById(session.user.id).select("walletBalance freeEditsRemaining");
   const transactions = await WalletTransaction.find({ user: session.user.id })
     .sort({ createdAt: -1 })
     .limit(50)
@@ -25,6 +25,7 @@ export async function GET() {
 
   return NextResponse.json({
     balance: user?.walletBalance ?? 0,
+    freeEditsRemaining: user?.freeEditsRemaining ?? 0,
     totalTransactions: transactions.length,
     totalSpent,
     transactions

@@ -2,11 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/mongodb";
-import User from "@/models/User";
-import Edit from "@/models/Edit";
 import { grokFaceSwap } from "@/lib/studio/xai";
 import { runReplicateModel } from "@/lib/studio/replicate";
 import { rehostResult } from "@/lib/studio/cloudinaryServer";
+import { beginGeneration, completeGeneration, refundGeneration } from "@/lib/studio/charge";
 
 const COST = 5000;
 const FALLBACK_MODEL = "codeplugtech/face-swap:278a81e7ebb22db98bcba54de985d22cc1abeead2754eb1f2af717247be69b34";
@@ -17,7 +16,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Log in to use Studio tools." }, { status: 401 });
   }
 
-  const { targetImage, sourceImage } = await req.json();
+  const { targetImage, sourceImage, regenerateEditId } = await req.json();
   if (!targetImage || !sourceImage) {
     return NextResponse.json(
       { error: "Both the photo to edit and the face to use are required." },
@@ -27,21 +26,17 @@ export async function POST(req: NextRequest) {
 
   await connectDB();
 
-  const debited = await User.findOneAndUpdate(
-    { _id: session.user.id, walletBalance: { $gte: COST } },
-    { $inc: { walletBalance: -COST } }
-  );
-  if (!debited) {
-    return NextResponse.json({ error: "Not enough wallet balance for this." }, { status: 402 });
-  }
-
-  const edit = await Edit.create({
-    user: session.user.id,
+  const begin = await beginGeneration({
+    userId: session.user.id,
     type: "face-swap",
+    cost: COST,
     originalImage: targetImage,
-    status: "processing",
-    cost: COST
+    regenerateEditId
   });
+  if (!begin.ok) {
+    return NextResponse.json({ error: begin.error }, { status: begin.status });
+  }
+  const { edit, chargeKind } = begin;
 
   try {
     let rawResultUrl: string;
@@ -52,16 +47,13 @@ export async function POST(req: NextRequest) {
       rawResultUrl = await runReplicateModel(FALLBACK_MODEL, { swap_image: sourceImage, input_image: targetImage });
     }
     const resultUrl = await rehostResult(rawResultUrl, "image");
-    edit.status = "completed";
-    edit.resultUrl = resultUrl;
-    await edit.save();
-    return NextResponse.json({ resultUrl: `/api/studio/media/${edit._id}` });
+    await completeGeneration(edit, chargeKind, resultUrl);
+    return NextResponse.json({ editId: edit._id, previewUrl: `/api/studio/media/${edit._id}?preview=1` });
   } catch (err) {
-    await User.findByIdAndUpdate(session.user.id, { $inc: { walletBalance: COST } });
-    edit.status = "failed";
-    edit.error = err instanceof Error ? err.message : "Unknown error";
-    await edit.save();
+    const message = err instanceof Error ? err.message : "Unknown error";
+    await refundGeneration(session.user.id, chargeKind, COST, edit, message);
     console.error("Face swap failed (both providers):", err);
-    return NextResponse.json({ error: "Could not process that swap. You have not been charged." }, { status: 502 });
+    const chargeNote = chargeKind === "wallet" ? " You have not been charged." : "";
+    return NextResponse.json({ error: `Could not process that swap.${chargeNote}` }, { status: 502 });
   }
 }

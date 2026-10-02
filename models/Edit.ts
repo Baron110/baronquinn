@@ -19,6 +19,8 @@ export interface IEdit {
   status: "pending" | "processing" | "completed" | "failed";
   cost: number;
   error?: string;
+  freeRegenerateUsed: boolean;
+  usedFreeEdit: boolean;
   createdAt: Date;
 }
 
@@ -35,6 +37,8 @@ const EditSchema = new Schema<IEdit>({
   status: { type: String, enum: ["pending", "processing", "completed", "failed"], default: "pending" },
   cost: { type: Number, required: true },
   error: { type: String },
+  freeRegenerateUsed: { type: Boolean, default: false },
+  usedFreeEdit: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 

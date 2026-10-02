@@ -4,6 +4,7 @@ import { useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import StudioTabs from "@/components/StudioTabs";
+import StudioDisclaimer from "@/components/StudioDisclaimer";
 import StudioSaveButton from "@/components/StudioSaveButton";
 import { formatNaira } from "@/lib/format";
 
@@ -21,11 +22,13 @@ function fileToBase64(file: File): Promise<string> {
 export default function VoiceClonePage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [text, setText] = useState("");
-  const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [regenUsed, setRegenUsed] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleRun() {
+  async function handleRun(isRegenerate = false) {
     if (!audioFile) {
       setError("Upload a voice sample first (1-2 minutes of clear speech works best).");
       return;
@@ -36,18 +39,25 @@ export default function VoiceClonePage() {
     }
     setError(null);
     setRunning(true);
-    setResultUrl(null);
+    if (!isRegenerate) setPreviewUrl(null);
 
     try {
       const audioBase64 = await fileToBase64(audioFile);
       const res = await fetch("/api/studio/voice-clone", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ audioBase64, mimeType: audioFile.type, text })
+        body: JSON.stringify({
+          audioBase64,
+          mimeType: audioFile.type,
+          text,
+          regenerateEditId: isRegenerate ? editId : undefined
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
-      setResultUrl(data.resultUrl);
+      setPreviewUrl(data.previewUrl);
+      setEditId(data.editId);
+      if (isRegenerate) setRegenUsed(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -66,6 +76,7 @@ export default function VoiceClonePage() {
 
         <StudioTabs active="voice-clone" />
 
+        <StudioDisclaimer />
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">
             Upload a short voice sample (1-2 minutes of clear speech), then type anything — it comes back read in
@@ -103,7 +114,7 @@ export default function VoiceClonePage() {
           <div className="flex items-center justify-between border-t border-line pt-4">
             <span className="text-sm text-ink/60">Cost: {formatNaira(COST)}</span>
             <button
-              onClick={handleRun}
+              onClick={() => handleRun(false)}
               disabled={running || !audioFile || !text.trim()}
               className="h-10 px-5 bg-ink text-paper text-sm rounded hover:opacity-90 transition-opacity disabled:opacity-50"
             >
@@ -111,10 +122,19 @@ export default function VoiceClonePage() {
             </button>
           </div>
 
-          {resultUrl && (
+          {previewUrl && editId && (
             <div className="mt-5 pt-5 border-t border-line">
-              <audio controls src={resultUrl} className="w-full" />
-              <StudioSaveButton url={resultUrl} filename="baronquinn-voice.mp3" mimeType="audio/mpeg" />
+              <audio controls src={previewUrl} className="w-full" />
+              <StudioSaveButton editId={editId} filename="baronquinn-voice.mp3" mimeType="audio/mpeg" />
+              <div className="text-center mt-2">
+                <button
+                  onClick={() => handleRun(true)}
+                  disabled={running}
+                  className="text-xs underline underline-offset-4 text-ink/50 hover:text-ink disabled:opacity-50"
+                >
+                  {regenUsed ? `Not quite right? Try again (${formatNaira(COST)})` : "Not quite right? Try again — free, one time"}
+                </button>
+              </div>
             </div>
           )}
         </div>
