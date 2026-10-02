@@ -108,7 +108,7 @@ export default function Header() {
     <>
       <header className="sticky top-0 z-40 bg-paper/95 backdrop-blur border-b border-line">
         <div className="max-w-content mx-auto px-5">
-          <div className="flex items-center justify-between h-16 gap-4">
+          <div className="flex items-center justify-between min-h-16 gap-y-2 gap-x-4 flex-wrap py-2">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setMenuOpen(true)}
@@ -131,7 +131,7 @@ export default function Header() {
               />
             </form>
 
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-3 flex-wrap justify-end">
               {session?.user?.role === "admin" && (
                 <Link
                   href="/08088adminpanel"
