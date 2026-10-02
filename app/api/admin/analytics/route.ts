@@ -44,6 +44,15 @@ export async function GET() {
     { $limit: 10 }
   ]);
 
+  // Capped at 200, same convention as the admin orders list — fine for now,
+  // would need real pagination well before that becomes a limit worth
+  // worrying about.
+  const users = await User.find()
+    .select("name email role emailVerified walletBalance createdAt")
+    .sort({ createdAt: -1 })
+    .limit(200)
+    .lean();
+
   return NextResponse.json({
     visitsToday,
     visitsThisWeek,
@@ -52,6 +61,7 @@ export async function GET() {
     totalUsers,
     dailyVisits,
     dailySignups,
-    topPaths
+    topPaths,
+    users
   });
 }
