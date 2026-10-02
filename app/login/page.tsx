@@ -32,8 +32,9 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-bone px-5 py-16">
       <div className="w-full max-w-md bg-paper border border-line rounded-2xl shadow-sm p-8">
-        <Link href="/" className="flex items-center gap-2 mb-8">
-          <span className="font-display text-xl tracking-tight">Baronquinn</span>
+        <Link href="/" className="flex items-center gap-1 mb-8">
+          <img src="/logo-mark.png" alt="" className="h-9 w-auto" />
+          <img src="/logo-wordmark.png" alt="Baron-Quinn" className="h-4 w-auto" />
         </Link>
 
         <h1 className="text-3xl leading-tight">Welcome back</h1>

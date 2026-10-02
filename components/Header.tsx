@@ -117,7 +117,7 @@ export default function Header() {
               >
                 <HamburgerIcon />
               </button>
-              <Link href="/" className="flex items-center gap-2 shrink-0">
+              <Link href="/" className="flex items-center gap-1 shrink-0">
                 <img src="/logo-mark.png" alt="" className="h-9 w-auto" />
                 <img src="/logo-wordmark.png" alt="Baron-Quinn" className="h-4 w-auto" />
               </Link>
@@ -219,7 +219,7 @@ export default function Header() {
           />
           <div className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-paper flex flex-col">
             <div className="flex items-center justify-between h-16 px-5 border-b border-line shrink-0">
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-1">
                 <img src="/logo-mark.png" alt="" className="h-7 w-auto" />
                 <img src="/logo-wordmark.png" alt="Baron-Quinn" className="h-3.5 w-auto" />
               </span>
