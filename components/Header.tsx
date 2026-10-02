@@ -135,7 +135,7 @@ export default function Header() {
               {session?.user?.role === "admin" && (
                 <Link
                   href="/08088adminpanel"
-                  className="hidden sm:block text-sm border border-ink px-4 h-10 leading-10 hover:bg-ink hover:text-paper transition-colors"
+                  className="hidden sm:inline-flex items-center justify-center text-sm border border-ink px-4 h-10 hover:bg-ink hover:text-paper transition-colors"
                 >
                   Admin
                 </Link>
@@ -144,7 +144,7 @@ export default function Header() {
               {status === "authenticated" && (
                 <Link
                   href="/orders"
-                  className="hidden sm:block text-sm border border-ink px-4 h-10 leading-10 hover:bg-ink hover:text-paper transition-colors"
+                  className="hidden sm:inline-flex items-center justify-center text-sm border border-ink px-4 h-10 hover:bg-ink hover:text-paper transition-colors"
                 >
                   Orders
                 </Link>
@@ -153,7 +153,7 @@ export default function Header() {
               {status === "authenticated" && (
                 <Link
                   href="/studio"
-                  className="hidden sm:block text-sm border border-ink px-4 h-10 leading-10 hover:bg-ink hover:text-paper transition-colors"
+                  className="hidden sm:inline-flex items-center justify-center text-sm border border-ink px-4 h-10 hover:bg-ink hover:text-paper transition-colors"
                 >
                   Studio
                 </Link>
@@ -162,7 +162,7 @@ export default function Header() {
               {status === "authenticated" && walletBalance !== null && (
                 <Link
                   href="/wallet"
-                  className="text-xs sm:text-sm border border-ink px-3 sm:px-4 h-10 leading-10 whitespace-nowrap hover:bg-ink hover:text-paper transition-colors"
+                  className="inline-flex items-center justify-center text-xs sm:text-sm border border-ink px-3 sm:px-4 h-10 whitespace-nowrap hover:bg-ink hover:text-paper transition-colors"
                 >
                   {formatNaira(walletBalance)}
                 </Link>
@@ -171,14 +171,14 @@ export default function Header() {
               {status === "authenticated" ? (
                 <button
                   onClick={() => signOut({ callbackUrl: "/" })}
-                  className="hidden sm:block text-sm border border-ink px-4 h-10 leading-10 hover:bg-ink hover:text-paper transition-colors"
+                  className="hidden sm:inline-flex items-center justify-center text-sm border border-ink px-4 h-10 hover:bg-ink hover:text-paper transition-colors"
                 >
                   Log out
                 </button>
               ) : (
                 <Link
                   href="/login"
-                  className="hidden sm:block text-sm border border-ink px-4 h-10 leading-10 hover:bg-ink hover:text-paper transition-colors"
+                  className="hidden sm:inline-flex items-center justify-center text-sm border border-ink px-4 h-10 hover:bg-ink hover:text-paper transition-colors"
                 >
                   Log in
                 </Link>
