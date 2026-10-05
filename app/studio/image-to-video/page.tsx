@@ -8,27 +8,18 @@ import StudioTabs from "@/components/StudioTabs";
 import StudioDisclaimer from "@/components/StudioDisclaimer";
 import StudioSaveButton from "@/components/StudioSaveButton";
 import { formatNaira } from "@/lib/format";
+import { STUDIO_VOICES, DEFAULT_VOICE } from "@/lib/studio/voices";
 
 const COST = 5000;
 const COST_WITH_VOICE = 10000; // keep in sync with the API route
 const MAX_SPOKEN_CHARS = 250; // keep in sync with the API route
-const MAX_VOICE_BYTES = 3 * 1024 * 1024; // the sample travels as base64 inside the request, which has a size limit
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 export default function ImageToVideoPage() {
   const [image, setImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
 
   const [addVoice, setAddVoice] = useState(false);
-  const [voiceFile, setVoiceFile] = useState<File | null>(null);
+  const [voiceId, setVoiceId] = useState<string>(DEFAULT_VOICE);
   const [spokenText, setSpokenText] = useState("");
   const [consent, setConsent] = useState(false);
 
@@ -52,20 +43,12 @@ export default function ImageToVideoPage() {
     }
 
     if (addVoice) {
-      if (!voiceFile) {
-        setError("Upload a voice sample first (1-2 minutes of clear speech works best).");
-        return;
-      }
-      if (voiceFile.size > MAX_VOICE_BYTES) {
-        setError("That voice sample is too large — keep it under 3 MB.");
-        return;
-      }
       if (!spokenText.trim()) {
         setError("Type what the voice should say.");
         return;
       }
       if (!consent) {
-        setError("Confirm you have permission to use this photo and voice.");
+        setError("Confirm you have permission to use this photo.");
         return;
       }
     } else if (!prompt.trim()) {
@@ -82,9 +65,9 @@ export default function ImageToVideoPage() {
         image,
         regenerateEditId: isRegenerate ? editId : undefined
       };
-      if (addVoice && voiceFile) {
-        body.voiceAudioBase64 = await fileToBase64(voiceFile);
-        body.voiceMimeType = voiceFile.type;
+      if (addVoice) {
+        body.addVoice = true;
+        body.voiceId = voiceId;
         body.spokenText = spokenText;
         body.consent = consent;
       } else {
@@ -110,7 +93,7 @@ export default function ImageToVideoPage() {
     }
   }
 
-  const canRun = !!image && !running && (addVoice ? !!voiceFile && !!spokenText.trim() && consent : true);
+  const canRun = !!image && !running && (addVoice ? !!spokenText.trim() && consent : true);
 
   return (
     <>
@@ -125,7 +108,7 @@ export default function ImageToVideoPage() {
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">
             {addVoice
-              ? "Upload a photo and a voice sample, then type what it should say — the face speaks it with matching lip movement. This takes 1–3 minutes."
+              ? "Upload a photo, pick a voice, and type what it should say — the face speaks it with matching lip movement. This takes 1–3 minutes."
               : "Upload a photo and describe how it should move. This takes 1–2 minutes."}
           </p>
 
@@ -141,7 +124,8 @@ export default function ImageToVideoPage() {
             <span className="text-sm">
               <span className="font-medium">Add a voice</span>
               <span className="block text-xs text-ink/50 mt-0.5">
-                Your photo speaks in a voice you upload, with lip-sync. Replaces the motion description.
+                Your photo speaks the words you type, in a voice you choose, with lip-sync. Replaces the motion
+                description.
               </span>
             </span>
           </label>
@@ -149,18 +133,18 @@ export default function ImageToVideoPage() {
           {addVoice ? (
             <div className="mt-5 space-y-5">
               <div>
-                <p className="text-xs font-medium mb-2">Voice sample</p>
-                <label className="block border border-dashed border-line rounded hover:border-ink transition-colors cursor-pointer py-8 text-center">
-                  <input
-                    type="file"
-                    accept="audio/*"
-                    className="hidden"
-                    onChange={(e) => setVoiceFile(e.target.files?.[0] ?? null)}
-                  />
-                  <span className="text-xs text-ink/40">
-                    {voiceFile ? voiceFile.name : "Click to upload an audio file (under 3 MB)"}
-                  </span>
-                </label>
+                <p className="text-xs font-medium mb-2">Voice</p>
+                <select
+                  value={voiceId}
+                  onChange={(e) => setVoiceId(e.target.value)}
+                  className="w-full h-10 px-3 border border-line rounded text-sm bg-paper focus:outline-none focus:border-ink"
+                >
+                  {STUDIO_VOICES.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.label} — {v.note}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -187,7 +171,7 @@ export default function ImageToVideoPage() {
                   className="mt-0.5 shrink-0"
                 />
                 <span className="text-xs text-ink/60 leading-relaxed">
-                  I own this photo and voice sample, or I have clear permission from the person to use both.
+                  I own this photo, or I have clear permission from the person in it.
                 </span>
               </label>
             </div>

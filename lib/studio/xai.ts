@@ -194,3 +194,22 @@ export async function grokImageToVideo(imageUrl: string, prompt: string): Promis
   }
   throw new Error("Timed out waiting for the video — it may still finish, try checking back shortly");
 }
+
+// Text to speech with one of xAI's built-in voices (no cloning involved).
+// Returns the raw mp3 bytes — the caller uploads them to Cloudinary.
+export async function textToSpeech(voiceId: string, text: string): Promise<ArrayBuffer> {
+  const key = process.env.XAI_API_KEY;
+  if (!key) throw new Error("XAI_API_KEY is not set");
+
+  const res = await fetch("https://api.x.ai/v1/tts", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ text, voice_id: voiceId, language: "auto" })
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Speech generation failed (${res.status}): ${errText.slice(0, 300)}`);
+  }
+  return res.arrayBuffer();
+}

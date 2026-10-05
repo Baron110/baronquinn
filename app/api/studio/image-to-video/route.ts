@@ -2,16 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/mongodb";
-import { grokImageToVideo, createVoiceClone, generateClonedSpeech } from "@/lib/studio/xai";
+import { grokImageToVideo, textToSpeech } from "@/lib/studio/xai";
 import { generateTalkingVideo } from "@/lib/studio/lipsync";
+import { isStudioVoice } from "@/lib/studio/voices";
 import { rehostResult, uploadAudioBuffer } from "@/lib/studio/cloudinaryServer";
 import { beginGeneration, completeGeneration, refundGeneration } from "@/lib/studio/charge";
 
 const COST = 5000;
 
-// Adding a voice runs three paid steps back to back (clone the voice, speak
-// the text, animate the face) instead of one, so it costs more. This is a
-// starting point — check it against your real provider bills and adjust.
+// Adding a voice runs two paid steps back to back (speak the text, animate
+// the face) instead of one, so it costs more. This is a starting point —
+// check it against your real provider bills and adjust.
 const COST_WITH_VOICE = 10000;
 
 // Caps the spoken length (~15-17 seconds of speech), which is what bounds
@@ -31,10 +32,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Log in to use Studio tools." }, { status: 401 });
   }
 
-  const { image, prompt, regenerateEditId, voiceAudioBase64, voiceMimeType, spokenText, consent } =
-    await req.json();
+  const { image, prompt, regenerateEditId, addVoice, voiceId, spokenText, consent } = await req.json();
 
-  const withVoice = Boolean(voiceAudioBase64);
+  const withVoice = addVoice === true;
   const spoken = typeof spokenText === "string" ? spokenText.trim() : "";
 
   if (!image) {
@@ -42,6 +42,9 @@ export async function POST(req: NextRequest) {
   }
 
   if (withVoice) {
+    if (!isStudioVoice(voiceId)) {
+      return NextResponse.json({ error: "Pick a voice." }, { status: 400 });
+    }
     if (!spoken) {
       return NextResponse.json({ error: "Type what the voice should say." }, { status: 400 });
     }
@@ -55,7 +58,7 @@ export async function POST(req: NextRequest) {
     // bypassed by anyone calling the API directly.
     if (consent !== true) {
       return NextResponse.json(
-        { error: "Confirm you have permission to use this photo and voice." },
+        { error: "Confirm you have permission to use this photo." },
         { status: 400 }
       );
     }
@@ -89,8 +92,7 @@ export async function POST(req: NextRequest) {
     let resultUrl: string;
 
     if (withVoice) {
-      const voiceId = await createVoiceClone(voiceAudioBase64, voiceMimeType || "audio/mpeg");
-      const speech = await generateClonedSpeech(voiceId, spoken);
+      const speech = await textToSpeech(voiceId, spoken);
       const audioUrl = await uploadAudioBuffer(speech);
 
       // Whatever time is left of the 180s budget, minus room to re-host
