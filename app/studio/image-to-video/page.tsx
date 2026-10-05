@@ -10,45 +10,107 @@ import StudioSaveButton from "@/components/StudioSaveButton";
 import { formatNaira } from "@/lib/format";
 
 const COST = 5000;
+const COST_WITH_VOICE = 10000; // keep in sync with the API route
+const MAX_SPOKEN_CHARS = 250; // keep in sync with the API route
+const MAX_VOICE_BYTES = 3 * 1024 * 1024; // the sample travels as base64 inside the request, which has a size limit
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function ImageToVideoPage() {
   const [image, setImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
+
+  const [addVoice, setAddVoice] = useState(false);
+  const [voiceFile, setVoiceFile] = useState<File | null>(null);
+  const [spokenText, setSpokenText] = useState("");
+  const [consent, setConsent] = useState(false);
+
   const [editId, setEditId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [resultMode, setResultMode] = useState<"motion" | "voice" | null>(null);
   const [regenUsed, setRegenUsed] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const mode = addVoice ? "voice" : "motion";
+  const cost = addVoice ? COST_WITH_VOICE : COST;
+  // A free regenerate only applies to the same kind of video it was earned
+  // on — a plain video's free retry can't be spent on a talking one.
+  const freeRegenAvailable = !regenUsed && resultMode === mode;
 
   async function handleRun(isRegenerate = false) {
     if (!image) {
       setError("Upload a photo first.");
       return;
     }
-    if (!prompt.trim()) {
+
+    if (addVoice) {
+      if (!voiceFile) {
+        setError("Upload a voice sample first (1-2 minutes of clear speech works best).");
+        return;
+      }
+      if (voiceFile.size > MAX_VOICE_BYTES) {
+        setError("That voice sample is too large — keep it under 3 MB.");
+        return;
+      }
+      if (!spokenText.trim()) {
+        setError("Type what the voice should say.");
+        return;
+      }
+      if (!consent) {
+        setError("Confirm you have permission to use this photo and voice.");
+        return;
+      }
+    } else if (!prompt.trim()) {
       setError("Describe the motion you want.");
       return;
     }
+
     setError(null);
     setRunning(true);
     if (!isRegenerate) setPreviewUrl(null);
+
     try {
+      const body: Record<string, unknown> = {
+        image,
+        regenerateEditId: isRegenerate ? editId : undefined
+      };
+      if (addVoice && voiceFile) {
+        body.voiceAudioBase64 = await fileToBase64(voiceFile);
+        body.voiceMimeType = voiceFile.type;
+        body.spokenText = spokenText;
+        body.consent = consent;
+      } else {
+        body.prompt = prompt;
+      }
+
       const res = await fetch("/api/studio/image-to-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image, prompt, regenerateEditId: isRegenerate ? editId : undefined })
+        body: JSON.stringify(body)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
+
       setPreviewUrl(data.previewUrl);
       setEditId(data.editId);
-      if (isRegenerate) setRegenUsed(true);
+      setRegenUsed(isRegenerate && freeRegenAvailable);
+      setResultMode(mode);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setRunning(false);
     }
   }
+
+  const canRun = !!image && !running && (addVoice ? !!voiceFile && !!spokenText.trim() && consent : true);
 
   return (
     <>
@@ -62,31 +124,95 @@ export default function ImageToVideoPage() {
         <StudioTabs active="image-to-video" />
         <div className="bg-paper border border-line rounded-xl p-6">
           <p className="text-sm text-ink/60 mb-5">
-            Upload a photo and describe how it should move. This takes 1–2 minutes.
+            {addVoice
+              ? "Upload a photo and a voice sample, then type what it should say — the face speaks it with matching lip movement. This takes 1–3 minutes."
+              : "Upload a photo and describe how it should move. This takes 1–2 minutes."}
           </p>
 
           <StudioUploadBox label="Photo" value={image} onChange={setImage} />
 
-          <div className="mt-4">
-            <label className="text-xs font-medium">Describe the motion</label>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="e.g. Make her wave and smile at the camera"
-              className="w-full mt-2 h-20 px-3 py-2 border border-line rounded text-sm resize-none focus:outline-none focus:border-ink"
+          <label className="flex items-start gap-2.5 mt-5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={addVoice}
+              onChange={(e) => setAddVoice(e.target.checked)}
+              className="mt-0.5 shrink-0"
             />
-          </div>
+            <span className="text-sm">
+              <span className="font-medium">Add a voice</span>
+              <span className="block text-xs text-ink/50 mt-0.5">
+                Your photo speaks in a voice you upload, with lip-sync. Replaces the motion description.
+              </span>
+            </span>
+          </label>
+
+          {addVoice ? (
+            <div className="mt-5 space-y-5">
+              <div>
+                <p className="text-xs font-medium mb-2">Voice sample</p>
+                <label className="block border border-dashed border-line rounded hover:border-ink transition-colors cursor-pointer py-8 text-center">
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    className="hidden"
+                    onChange={(e) => setVoiceFile(e.target.files?.[0] ?? null)}
+                  />
+                  <span className="text-xs text-ink/40">
+                    {voiceFile ? voiceFile.name : "Click to upload an audio file (under 3 MB)"}
+                  </span>
+                </label>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium">What should it say?</p>
+                  <span className="text-xs text-ink/40">
+                    {spokenText.length}/{MAX_SPOKEN_CHARS}
+                  </span>
+                </div>
+                <textarea
+                  value={spokenText}
+                  onChange={(e) => setSpokenText(e.target.value.slice(0, MAX_SPOKEN_CHARS))}
+                  rows={3}
+                  placeholder="Type the words you want spoken..."
+                  className="w-full border border-line rounded p-3 text-sm focus:outline-none focus:border-ink resize-none"
+                />
+              </div>
+
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consent}
+                  onChange={(e) => setConsent(e.target.checked)}
+                  className="mt-0.5 shrink-0"
+                />
+                <span className="text-xs text-ink/60 leading-relaxed">
+                  I own this photo and voice sample, or I have clear permission from the person to use both.
+                </span>
+              </label>
+            </div>
+          ) : (
+            <div className="mt-4">
+              <label className="text-xs font-medium">Describe the motion</label>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="e.g. Make her wave and smile at the camera"
+                className="w-full mt-2 h-20 px-3 py-2 border border-line rounded text-sm resize-none focus:outline-none focus:border-ink"
+              />
+            </div>
+          )}
 
           {error && <p className="text-xs text-red-700 mt-3">{error}</p>}
 
           <div className="flex items-center justify-between border-t border-line pt-4 mt-6">
-            <span className="text-sm text-ink/60">Cost: {formatNaira(COST)}</span>
+            <span className="text-sm text-ink/60">Cost: {formatNaira(cost)}</span>
             <button
               onClick={() => handleRun(false)}
-              disabled={running || !image}
+              disabled={!canRun}
               className="h-10 px-5 bg-ink text-paper text-sm rounded hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {running ? "Generating (1-2 min)..." : "Generate video"}
+              {running ? "Generating (1-3 min)..." : addVoice ? "Generate talking video" : "Generate video"}
             </button>
           </div>
         </div>
@@ -101,13 +227,15 @@ export default function ImageToVideoPage() {
                 disabled={running}
                 className="text-xs underline underline-offset-4 text-ink/50 hover:text-ink disabled:opacity-50"
               >
-                {regenUsed ? `Not quite right? Try again (${formatNaira(COST)})` : "Not quite right? Try again — free, one time"}
+                {freeRegenAvailable
+                  ? "Not quite right? Try again — free, one time"
+                  : `Not quite right? Try again (${formatNaira(cost)})`}
               </button>
             </div>
           </div>
         )}
-              <StudioDisclaimer />
-</main>
+        <StudioDisclaimer />
+      </main>
       <Footer />
     </>
   );

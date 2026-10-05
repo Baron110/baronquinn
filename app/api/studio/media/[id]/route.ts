@@ -46,7 +46,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   const type = (edit as any).type as string;
   const contentType =
-    type === "image-to-video" ? CONTENT_TYPES["image-to-video"] : type === "voice-clone" ? CONTENT_TYPES["voice-clone"] : CONTENT_TYPES.image;
+    type === "image-to-video" || type === "talking-video"
+      ? CONTENT_TYPES["image-to-video"]
+      : type === "voice-clone"
+        ? CONTENT_TYPES["voice-clone"]
+        : CONTENT_TYPES.image;
   const ext = contentType === "video/mp4" ? "mp4" : contentType === "audio/mpeg" ? "mp3" : "png";
 
   const isPreview = req.nextUrl.searchParams.get("preview") === "1";

@@ -8,6 +8,33 @@ function headers() {
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 }
 
+// Replicate predictions run async — poll until it's done. If we run out of
+// time first, cancel the job on the way out so it stops accruing cost for a
+// result nobody is going to receive.
+async function waitForPrediction(created: any, timeoutMs: number): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let prediction = created;
+
+  while (prediction.status !== "succeeded" && prediction.status !== "failed" && prediction.status !== "canceled") {
+    if (Date.now() > deadline) {
+      await fetch(`${BASE_URL}/predictions/${created.id}/cancel`, { method: "POST", headers: headers() }).catch(
+        () => {}
+      );
+      throw new Error("Timed out waiting for Replicate");
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+    const pollRes = await fetch(`${BASE_URL}/predictions/${created.id}`, { headers: headers() });
+    prediction = await pollRes.json();
+  }
+
+  if (prediction.status !== "succeeded") {
+    throw new Error(prediction.error ?? "Replicate processing failed");
+  }
+
+  const output = prediction.output;
+  return Array.isArray(output) ? output[0] : output;
+}
+
 // `version` is the model's version hash from Replicate's model page, e.g.
 // "lucataco/remove-bg:<hash>" — run() splits that apart itself.
 export async function runReplicateModel(modelVersion: string, input: Record<string, unknown>): Promise<string> {
@@ -23,22 +50,29 @@ export async function runReplicateModel(modelVersion: string, input: Record<stri
     throw new Error(created?.detail ?? "Replicate rejected the request");
   }
 
-  // Replicate predictions run async — poll until it's done. Most of these
-  // models finish in a few seconds; 90s covers a slow cold start too.
-  const deadline = Date.now() + 90_000;
-  let prediction = created;
+  // Most of these models finish in a few seconds; 90s covers a slow cold
+  // start too.
+  return waitForPrediction(created, 90_000);
+}
 
-  while (prediction.status !== "succeeded" && prediction.status !== "failed" && prediction.status !== "canceled") {
-    if (Date.now() > deadline) throw new Error("Timed out waiting for Replicate");
-    await new Promise((r) => setTimeout(r, 1500));
-    const pollRes = await fetch(`${BASE_URL}/predictions/${created.id}`, { headers: headers() });
-    prediction = await pollRes.json();
+// Official models (like "veed/fabric-1.0") are addressed by name rather than
+// a version hash — Replicate always runs their current version. Takes an
+// explicit timeout because some of these (video) run far longer than the
+// image models above.
+export async function runReplicateOfficialModel(
+  model: string,
+  input: Record<string, unknown>,
+  timeoutMs: number
+): Promise<string> {
+  const createRes = await fetch(`${BASE_URL}/models/${model}/predictions`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ input })
+  });
+  const created = await createRes.json();
+  if (!createRes.ok) {
+    throw new Error(created?.detail ?? "Replicate rejected the request");
   }
 
-  if (prediction.status !== "succeeded") {
-    throw new Error(prediction.error ?? "Replicate processing failed");
-  }
-
-  const output = prediction.output;
-  return Array.isArray(output) ? output[0] : output;
+  return waitForPrediction(created, timeoutMs);
 }

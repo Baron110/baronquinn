@@ -6,6 +6,7 @@ export type EditType =
   | "remove-bg"
   | "enhance"
   | "image-to-video"
+  | "talking-video"
   | "voice-clone"
   | "docs";
 
@@ -28,7 +29,7 @@ const EditSchema = new Schema<IEdit>({
   user: { type: Schema.Types.ObjectId, ref: "User", required: true },
   type: {
     type: String,
-    enum: ["prompt-edit", "face-swap", "remove-bg", "enhance", "image-to-video", "voice-clone", "docs"],
+    enum: ["prompt-edit", "face-swap", "remove-bg", "enhance", "image-to-video", "talking-video", "voice-clone", "docs"],
     required: true
   },
   prompt: { type: String },
