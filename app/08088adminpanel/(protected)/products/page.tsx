@@ -46,9 +46,14 @@ export default function AdminProducts() {
     <div>
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-3xl">Products</h1>
-        <Link href="/08088adminpanel/products/new" className="border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper transition-colors">
-          + New product
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/08088adminpanel/products/bulk" className="bg-ink text-paper px-4 py-2 text-sm hover:opacity-90 transition-opacity">
+            Bulk add (AI)
+          </Link>
+          <Link href="/08088adminpanel/products/new" className="border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper transition-colors">
+            + New product
+          </Link>
+        </div>
       </div>
 
       {!loading && (

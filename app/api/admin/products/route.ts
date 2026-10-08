@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   if (error) return error;
 
   const body = await req.json();
-  const { name, description, price, compareAt, category, images, duration, isCustomized, badge } = body;
+  const { name, description, price, compareAt, category, images, duration, isCustomized, badge, active } = body;
 
   if (!name || !price || !category) {
     return NextResponse.json({ error: "name, price, and category are required" }, { status: 400 });
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     duration: duration || "1-2 days",
     isCustomized: !!isCustomized,
     badge: badge || undefined,
-    active: true
+    active: active === false ? false : true
   });
 
   return NextResponse.json(product);
