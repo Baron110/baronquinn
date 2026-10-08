@@ -1,6 +1,7 @@
 // Reads a product photo (or a screenshot of a product listing) with a vision
 // model and returns the fields the admin would otherwise type by hand.
-// Price is deliberately NOT guessed here — the admin sets it.
+// Price is never guessed. For screenshots, a price that is actually printed
+// in the image is read out and returned; otherwise the admin sets it.
 
 export type VisionMode = "photo" | "screenshot";
 
@@ -11,6 +12,10 @@ export type VisionResult = {
   categorySlug: string;
   // customised/personalised item (photo frame, engraved, etc.)
   looksCustom: boolean;
+  // Screenshots only: the selling price printed in the image (digits only), or null.
+  detectedPrice: number | null;
+  // Currency of that price: "NGN", "USD", "GBP", "EUR", other ISO code, or "".
+  priceCurrency: string;
   // Only for screenshots: where the product photo sits, as 0–1 fractions of
   // the full image. null if the whole image already is the photo.
   box: { x: number; y: number; w: number; h: number } | null;
@@ -42,7 +47,9 @@ Fields:
   const screenshotExtra = `
 This image is a SCREENSHOT of a product listing (it contains app/website UI, text, maybe a price).
 - "name": use the product title text that is written in the screenshot (cleaned up). If no title is shown, describe the item.
-- Ignore any price, ratings, buttons, status bar or seller details completely.
+- "detectedPrice": the current selling price printed in the screenshot as a plain number (e.g. "₦45,000" -> 45000, "45k" -> 45000, "N 12,500.00" -> 12500). If a crossed-out old price and a current price both show, use the current one. null if no price is visible. Never guess a price that is not written.
+- "priceCurrency": "NGN" for ₦, N or naira; "USD" for $; "GBP" for £; "EUR" for €; another ISO code if clearly shown; "" if there is no price or no currency symbol.
+- Ignore ratings, reviews, buttons, status bar and seller details.
 - "box": {"x":0-1,"y":0-1,"w":0-1,"h":0-1} = the tightest rectangle around ONLY the main product photo (no text, no buttons, no status bar, no thumbnails strip), as fractions of the full image width/height measured from the top-left. If several photos are shown, use the largest main one.`;
 
   const photoExtra = `
@@ -96,7 +103,17 @@ This image is a plain product photo. Name it from what you see. Set "box" to nul
     if (w > 0.1 && h > 0.1 && !(w > 0.97 && h > 0.97)) box = { x, y, w, h };
   }
 
+  let detectedPrice: number | null = null;
+  if (mode === "screenshot") {
+    const n = Number(String(parsed.detectedPrice ?? "").replace(/[^0-9.]/g, ""));
+    if (Number.isFinite(n) && n > 0) detectedPrice = Math.round(n);
+  }
+  const priceCurrency =
+    detectedPrice !== null && typeof parsed.priceCurrency === "string" ? parsed.priceCurrency.trim().toUpperCase().slice(0, 4) : "";
+
   return {
+    detectedPrice,
+    priceCurrency,
     name: String(parsed.name ?? "").trim().slice(0, 80),
     description: String(parsed.description ?? "").trim().slice(0, 400),
     categorySlug,

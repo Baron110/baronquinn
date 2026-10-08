@@ -22,6 +22,8 @@ type Row = {
   isCustomized: boolean;
   badge: string;
   box: Box | null;
+  shownPrice: number | null; // price the AI read from a screenshot
+  shownCurrency: string;
   previewUrl: string;
   originalUrl: string;
   durationTouched: boolean;
@@ -124,6 +126,9 @@ export default function BulkAddPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [goLive, setGoLive] = useState(true);
+  const [markup, setMarkup] = useState("0");
+  const markupRef = useRef(0);
+  markupRef.current = Number(markup) > 0 ? Number(markup) : 0;
   const [publishing, setPublishing] = useState(false);
 
   const imgs = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -196,12 +201,25 @@ export default function BulkAddPage() {
       const previewUrl = URL.createObjectURL(await canvasToBlob(drawToCanvas(img, box, 700), 0.85));
       const suggested = catBySlug.get(data.categorySlug);
 
+      // A naira price printed in the screenshot becomes the starting price
+      // (plus your markup). Other currencies are only shown as a hint.
+      const shown: number | null = typeof data.detectedPrice === "number" ? data.detectedPrice : null;
+      const currency: string = data.priceCurrency ?? "";
+      let startPrice = "";
+      if (rowMode === "screenshot" && shown && currency === "NGN") {
+        const withMarkup = shown * (1 + markupRef.current / 100);
+        startPrice = String(markupRef.current > 0 ? Math.round(withMarkup / 100) * 100 : Math.round(withMarkup));
+      }
+
       patch(id, {
         status: "ready",
         name: data.name ?? "",
         description: data.description ?? "",
         aiCategoryId: suggested?._id ?? "",
         isCustomized: !!data.looksCustom,
+        price: startPrice,
+        shownPrice: rowMode === "screenshot" ? shown : null,
+        shownCurrency: currency,
         box,
         previewUrl
       });
@@ -235,6 +253,8 @@ export default function BulkAddPage() {
         isCustomized: false,
         badge: "",
         box: null,
+        shownPrice: null,
+        shownCurrency: "",
         previewUrl: url,
         originalUrl: url,
         durationTouched: false,
@@ -396,6 +416,22 @@ export default function BulkAddPage() {
             ? "The AI names each product from what it sees."
             : "The AI reads the product name from the screenshot, then crops out only the product photo and ignores the rest. You can fix the crop in each row."}
         </p>
+        {mode === "screenshot" && (
+          <div className="mb-4">
+            <label className="text-xs uppercase tracking-wide text-ink/50">Add markup to prices read from screenshots (%)</label>
+            <input
+              className={`${inputClass} mt-1.5 max-w-[140px]`}
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={markup}
+              onChange={(e) => setMarkup(e.target.value)}
+            />
+            <p className="text-xs text-ink/40 mt-1.5">
+              0 = use the screenshot price exactly. 20 = add 20% on top. Set this before you choose the images. You can still change any price.
+            </p>
+          </div>
+        )}
         <input
           ref={fileInput}
           type="file"
@@ -523,6 +559,23 @@ export default function BulkAddPage() {
                       value={r.price}
                       onChange={(e) => patch(r.id, { price: e.target.value })}
                     />
+                    {r.shownPrice && (
+                      <p className="text-xs text-ink/50 mt-1.5">
+                        Screenshot showed {r.shownCurrency === "NGN" ? formatNaira(r.shownPrice) : `${r.shownCurrency || ""} ${r.shownPrice.toLocaleString()}`.trim()}
+                        {r.shownCurrency !== "NGN" && (
+                          <>
+                            {" "}
+                            <button
+                              type="button"
+                              className="underline underline-offset-4"
+                              onClick={() => patch(r.id, { price: String(r.shownPrice) })}
+                            >
+                              use this number
+                            </button>
+                          </>
+                        )}
+                      </p>
+                    )}
                     <div className="flex flex-wrap gap-2 mt-2">
                       {commonPrices.map((p) => (
                         <Chip key={p} active={Number(r.price) === p} onClick={() => patch(r.id, { price: String(p) })}>
