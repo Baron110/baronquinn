@@ -577,7 +577,7 @@ export default function BulkAddPage() {
                     </label>
                   </div>
 
-                  {modeByRow.current.get(r.id) === "screenshot" && <CropAdjuster row={r} onChange={(b) => updateBox(r, b)} />}
+                  <CropEditor row={r} img={imgs.current.get(r.id)} onChange={(b) => updateBox(r, b)} />
 
                   <div className="flex items-center justify-between pt-1">
                     <button type="button" onClick={() => removeRow(r.id)} className="text-xs text-red-700">
@@ -643,72 +643,166 @@ export default function BulkAddPage() {
   );
 }
 
-// Lets you nudge the crop if the AI's box is slightly off: four sliders that
-// trim from each edge of the screenshot, with the kept area outlined live.
-function CropAdjuster({ row, onChange }: { row: Row; onChange: (b: Box | null) => void }) {
-  const [show, setShow] = useState(false);
-  const box = row.box ?? { x: 0, y: 0, w: 1, h: 1 };
-  const left = Math.round(box.x * 100);
-  const top = Math.round(box.y * 100);
-  const right = Math.round((1 - box.x - box.w) * 100);
-  const bottom = Math.round((1 - box.y - box.h) * 100);
+// Manual cropping: drag the box to move it, drag a corner to resize it.
+// Works with a finger or a mouse. Presets lock the shape (square suits the
+// product cards best). Free = any shape.
+type Ratio = "free" | "1:1" | "4:5" | "3:4";
+const RATIOS: Record<Ratio, number | null> = { free: null, "1:1": 1, "4:5": 4 / 5, "3:4": 3 / 4 };
+const MIN = 0.08;
 
-  function set(side: "left" | "top" | "right" | "bottom", value: number) {
-    const v = Math.min(80, Math.max(0, value)) / 100;
-    let l = left / 100;
-    let t = top / 100;
-    let r = right / 100;
-    let b = bottom / 100;
-    if (side === "left") l = Math.min(v, 0.95 - r);
-    if (side === "top") t = Math.min(v, 0.95 - b);
-    if (side === "right") r = Math.min(v, 0.95 - l);
-    if (side === "bottom") b = Math.min(v, 0.95 - t);
-    onChange({ x: l, y: t, w: 1 - l - r, h: 1 - t - b });
+function clamp(n: number, lo: number, hi: number) {
+  return Math.min(hi, Math.max(lo, n));
+}
+
+function CropEditor({ row, img, onChange }: { row: Row; img?: HTMLImageElement; onChange: (b: Box | null) => void }) {
+  const [show, setShow] = useState(false);
+  const [ratio, setRatio] = useState<Ratio>("free");
+  const [draft, setDraft] = useState<Box | null>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ kind: "move" | "tl" | "tr" | "bl" | "br"; start: Box; px: number; py: number } | null>(null);
+
+  const box: Box = draft ?? row.box ?? { x: 0, y: 0, w: 1, h: 1 };
+  // image aspect (width / height) — converts between fractions and pixels
+  const A = img && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1;
+
+  function commit(b: Box) {
+    const full = b.w > 0.985 && b.h > 0.985;
+    onChange(full ? null : b);
+  }
+
+  function applyRatio(next: Ratio) {
+    setRatio(next);
+    const r = RATIOS[next];
+    if (!r) return;
+    // biggest box of this shape, centred on the current box
+    let w = box.w;
+    let h = (w * A) / r;
+    if (h > 1) {
+      h = 1;
+      w = (h * r) / A;
+    }
+    if (w > 1) {
+      w = 1;
+      h = (w * A) / r;
+    }
+    const cx = box.x + box.w / 2;
+    const cy = box.y + box.h / 2;
+    const b = { x: clamp(cx - w / 2, 0, 1 - w), y: clamp(cy - h / 2, 0, 1 - h), w, h };
+    setDraft(null);
+    commit(b);
+  }
+
+  function begin(e: React.PointerEvent, kind: "move" | "tl" | "tr" | "bl" | "br") {
+    e.stopPropagation();
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    drag.current = { kind, start: box, px: e.clientX, py: e.clientY };
+  }
+
+  function move(e: React.PointerEvent) {
+    const d = drag.current;
+    const el = wrap.current;
+    if (!d || !el) return;
+    const rect = el.getBoundingClientRect();
+    const dx = (e.clientX - d.px) / rect.width;
+    const dy = (e.clientY - d.py) / rect.height;
+    const s = d.start;
+
+    if (d.kind === "move") {
+      setDraft({ ...s, x: clamp(s.x + dx, 0, 1 - s.w), y: clamp(s.y + dy, 0, 1 - s.h) });
+      return;
+    }
+
+    const right = d.kind === "tr" || d.kind === "br";
+    const bottom = d.kind === "bl" || d.kind === "br";
+    const ax = right ? s.x : s.x + s.w; // opposite (fixed) corner
+    const ay = bottom ? s.y : s.y + s.h;
+    const pointX = clamp((right ? s.x + s.w : s.x) + dx, 0, 1);
+    const pointY = clamp((bottom ? s.y + s.h : s.y) + dy, 0, 1);
+    const maxW = right ? 1 - ax : ax;
+    const maxH = bottom ? 1 - ay : ay;
+
+    let w = clamp(Math.abs(pointX - ax), MIN, maxW);
+    let h = clamp(Math.abs(pointY - ay), MIN, maxH);
+    const r = RATIOS[ratio];
+    if (r) {
+      w = clamp(w, MIN, Math.min(maxW, (maxH * r) / A));
+      h = (w * A) / r;
+    }
+    setDraft({ x: right ? ax : ax - w, y: bottom ? ay : ay - h, w, h });
+  }
+
+  function end() {
+    if (!drag.current) return;
+    drag.current = null;
+    if (draft) {
+      commit(draft);
+      setDraft(null);
+    }
   }
 
   if (!show) {
     return (
-      <button type="button" onClick={() => setShow(true)} className="text-xs underline underline-offset-4">
-        Fix the crop
+      <button type="button" onClick={() => setShow(true)} className="h-9 px-3 text-sm border border-line hover:border-ink">
+        ✂ Crop photo{row.box ? " (cropped)" : ""}
       </button>
     );
   }
 
-  const sliders: { side: "left" | "top" | "right" | "bottom"; label: string; value: number }[] = [
-    { side: "left", label: "Trim left", value: left },
-    { side: "right", label: "Trim right", value: right },
-    { side: "top", label: "Trim top", value: top },
-    { side: "bottom", label: "Trim bottom", value: bottom }
-  ];
+  const handle = "absolute w-7 h-7 bg-paper border-2 border-ink rounded-full";
 
   return (
     <div className="border border-line p-3 space-y-3">
-      <div className="relative w-full max-w-xs mx-auto bg-bone">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={row.originalUrl} alt="" className="w-full block opacity-60" />
-        <div
-          className="absolute border-2 border-rust bg-white/10"
-          style={{ left: `${left}%`, top: `${top}%`, right: `${right}%`, bottom: `${bottom}%` }}
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-        {sliders.map((s) => (
-          <label key={s.side} className="text-xs text-ink/60">
-            {s.label}
-            <input
-              type="range"
-              min={0}
-              max={80}
-              value={s.value}
-              onChange={(e) => set(s.side, Number(e.target.value))}
-              className="w-full"
-            />
-          </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs uppercase tracking-wide text-ink/50 mr-1">Crop shape</span>
+        {(Object.keys(RATIOS) as Ratio[]).map((k) => (
+          <Chip key={k} active={ratio === k} onClick={() => applyRatio(k)}>
+            {k === "free" ? "Free" : k === "1:1" ? "Square" : k}
+          </Chip>
         ))}
       </div>
+
+      <div
+        ref={wrap}
+        className="relative w-full max-w-sm mx-auto select-none overflow-hidden bg-bone"
+        style={{ touchAction: "none" }}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={row.originalUrl} alt="" draggable={false} className="w-full block pointer-events-none" />
+        <div
+          className="absolute border-2 border-white cursor-move"
+          style={{
+            left: `${box.x * 100}%`,
+            top: `${box.y * 100}%`,
+            width: `${box.w * 100}%`,
+            height: `${box.h * 100}%`,
+            boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)",
+            touchAction: "none"
+          }}
+          onPointerDown={(e) => begin(e, "move")}
+        >
+          <div className={`${handle} -left-3.5 -top-3.5 cursor-nwse-resize`} style={{ touchAction: "none" }} onPointerDown={(e) => begin(e, "tl")} />
+          <div className={`${handle} -right-3.5 -top-3.5 cursor-nesw-resize`} style={{ touchAction: "none" }} onPointerDown={(e) => begin(e, "tr")} />
+          <div className={`${handle} -left-3.5 -bottom-3.5 cursor-nesw-resize`} style={{ touchAction: "none" }} onPointerDown={(e) => begin(e, "bl")} />
+          <div className={`${handle} -right-3.5 -bottom-3.5 cursor-nwse-resize`} style={{ touchAction: "none" }} onPointerDown={(e) => begin(e, "br")} />
+        </div>
+      </div>
+      <p className="text-xs text-ink/40 text-center">Drag the box to move it. Drag a corner to resize.</p>
+
       <div className="flex gap-4">
-        <button type="button" onClick={() => onChange(null)} className="text-xs underline underline-offset-4">
-          Use the whole image
+        <button
+          type="button"
+          onClick={() => {
+            setRatio("free");
+            setDraft(null);
+            onChange(null);
+          }}
+          className="text-xs underline underline-offset-4"
+        >
+          Reset to the whole image
         </button>
         <button type="button" onClick={() => setShow(false)} className="text-xs underline underline-offset-4">
           Close
